@@ -515,22 +515,46 @@ class StaffApprovalView(discord.ui.View):
                 ephemeral=True,
             )
             return
-        if rank_role:
+        try:
             await member.add_roles(rank_role, reason="Recruit request approved")
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I cannot assign that role. Move my bot role above it and ensure I have Manage Roles.",
+                ephemeral=True,
+            )
+            return
 
         if cfg.get("unverified_role_id"):
             unverified_role = interaction.guild.get_role(int(cfg["unverified_role_id"]))
             if unverified_role and unverified_role in member.roles:
                 await member.remove_roles(unverified_role, reason="Recruit approved")
 
+        # Format nickname as: Player Name | Player ID (max Discord nickname length is 32).
+        player_name = str(recruit[0] or "").strip()
+        player_id = str(recruit[1] or "").strip()
+        if player_name and player_id:
+            suffix = f" | {player_id}"
+            max_name_len = max(0, 32 - len(suffix))
+            nickname = f"{player_name[:max_name_len]}{suffix}" if max_name_len else player_name[:32]
+            try:
+                await member.edit(nick=nickname, reason="Recruit approved nickname format")
+            except discord.Forbidden:
+                # Nickname update can fail due to role hierarchy; keep approval flow working.
+                pass
+
         set_recruit_rank(self.guild_id, self.user_id, self.selected_rank_name, self.selected_rank_role_id)
         approve_user(self.guild_id, self.user_id)
 
-        embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else discord.Embed()
-        embed.color = discord.Color.green()
-        embed.set_field_at(3, name="Selected Rank", value=self.selected_rank_name, inline=True)
-        embed.add_field(name="Approved", value=f"by {interaction.user.mention}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
+        await interaction.response.defer(ephemeral=True)
+        if interaction.message:
+            try:
+                await interaction.message.delete()
+            except discord.NotFound:
+                pass
+        await interaction.followup.send(
+            f"Approved {member.mention}. Assigned role {rank_role.mention} and closed the request.",
+            ephemeral=True,
+        )
 
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.danger)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -544,10 +568,13 @@ class StaffApprovalView(discord.ui.View):
 
         delete_user(self.guild_id, self.user_id)
 
-        embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else discord.Embed()
-        embed.color = discord.Color.red()
-        embed.add_field(name="Denied", value=f"by {interaction.user.mention}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
+        await interaction.response.defer(ephemeral=True)
+        if interaction.message:
+            try:
+                await interaction.message.delete()
+            except discord.NotFound:
+                pass
+        await interaction.followup.send("Request denied and removed from the approval channel.", ephemeral=True)
 
 
 class RecruitBot(commands.Bot):
