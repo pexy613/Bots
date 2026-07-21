@@ -8,6 +8,7 @@ import database
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
+COMBINED_PANELS_GUILD_ID = os.getenv("COMBINED_PANELS_GUILD_ID")
 
 if not TOKEN:
     raise RuntimeError("TOKEN is missing. Create a .env file and add TOKEN=your_bot_token_here")
@@ -41,6 +42,8 @@ async def main():
         await bot.load_extension("cogs.admin")
         await bot.load_extension("cogs.panel")
         await bot.load_extension("cogs.goals")
+        if COMBINED_PANELS_GUILD_ID:
+            await bot.load_extension("cogs.combined_panels")
         await bot.start(TOKEN)
 
 

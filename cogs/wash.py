@@ -9,6 +9,7 @@ from utils import format_money, can_manage
 from ui import create_embed
 from cogs.live_dashboard import update_live_dashboard
 from cogs.leaderboard import update_live_leaderboard
+from cogs.combined_panels import update_live_combined_dashboard, update_live_combined_leaderboard
 
 
 class DeleteWashButton(discord.ui.DynamicItem[discord.ui.Button], template=r"delete_wash:(?P<wash_id>[0-9]+)"):
@@ -63,6 +64,8 @@ class DeleteWashButton(discord.ui.DynamicItem[discord.ui.Button], template=r"del
 
         await update_live_dashboard(interaction.client, interaction.guild_id)
         await update_live_leaderboard(interaction.client, interaction.guild_id)
+        await update_live_combined_dashboard(interaction.client, interaction.guild_id)
+        await update_live_combined_leaderboard(interaction.client, interaction.guild_id)
 
         from cogs.goals import update_goal_dashboard
         await update_goal_dashboard(interaction.client, interaction.guild_id)
@@ -296,6 +299,8 @@ class WashSelectionView(discord.ui.View):
 
         await update_live_dashboard(interaction.client, interaction.guild_id)
         await update_live_leaderboard(interaction.client, interaction.guild_id)
+        await update_live_combined_dashboard(interaction.client, interaction.guild_id)
+        await update_live_combined_leaderboard(interaction.client, interaction.guild_id)
 
         from cogs.goals import update_goal_dashboard
         await update_goal_dashboard(interaction.client, interaction.guild_id)

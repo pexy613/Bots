@@ -11,6 +11,7 @@ from utils import is_management
 from cogs.live_dashboard import update_live_dashboard
 from cogs.leaderboard import update_live_leaderboard
 from cogs.goals import update_goal_dashboard
+from cogs.combined_panels import update_live_combined_dashboard, update_live_combined_leaderboard
 
 
 class AdminCog(commands.Cog):
@@ -30,6 +31,8 @@ class AdminCog(commands.Cog):
         await update_live_dashboard(self.bot, interaction.guild_id)
         await update_live_leaderboard(self.bot, interaction.guild_id)
         await update_goal_dashboard(self.bot, interaction.guild_id)
+        await update_live_combined_dashboard(self.bot, interaction.guild_id)
+        await update_live_combined_leaderboard(self.bot, interaction.guild_id)
 
         await interaction.followup.send(
             "✅ All wash data has been reset. Dashboard totals are now 0.",
@@ -60,6 +63,8 @@ class AdminCog(commands.Cog):
         await update_live_dashboard(self.bot, interaction.guild_id)
         await update_live_leaderboard(self.bot, interaction.guild_id)
         await update_goal_dashboard(self.bot, interaction.guild_id)
+        await update_live_combined_dashboard(self.bot, interaction.guild_id)
+        await update_live_combined_leaderboard(self.bot, interaction.guild_id)
 
         await interaction.followup.send(
             f"✅ Wash #{wash_id} deleted. Dashboard, leaderboard, and goal progress updated.",
@@ -114,6 +119,8 @@ class AdminCog(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         await update_live_dashboard(self.bot, interaction.guild_id)
         await update_live_leaderboard(self.bot, interaction.guild_id)
+        await update_live_combined_dashboard(self.bot, interaction.guild_id)
+        await update_live_combined_leaderboard(self.bot, interaction.guild_id)
         await interaction.followup.send("✅ Live dashboard and leaderboard refreshed.", ephemeral=True)
 
 
