@@ -344,10 +344,9 @@ def setup_status_embed(guild: discord.Guild) -> discord.Embed:
 
 
 class RankSelect(discord.ui.Select):
-    def __init__(self, rank_rows: list[tuple[str, int]], player_name: str, player_id: str, nickname: str):
+    def __init__(self, rank_rows: list[tuple[str, int]], player_name: str, player_id: str):
         self.player_name = player_name
         self.player_id = player_id
-        self.nickname = nickname
         options = [
             discord.SelectOption(label=name[:100], value=f"{name}|{role_id}")
             for name, role_id in rank_rows[:25]
@@ -384,7 +383,7 @@ class RankSelect(discord.ui.Select):
             self.player_id,
             rank_name,
             role_id,
-            self.nickname,
+            "",
         )
 
         cfg = get_guild_config(interaction.guild_id)
@@ -401,7 +400,6 @@ class RankSelect(discord.ui.Select):
         embed.add_field(name="Player", value=self.player_name, inline=True)
         embed.add_field(name="Player ID", value=self.player_id, inline=True)
         embed.add_field(name="Rank", value=rank_name, inline=True)
-        embed.add_field(name="Nickname", value=self.nickname or "(none)", inline=False)
         embed.set_footer(text=f"Guild {interaction.guild_id} | User {interaction.user.id}")
 
         view = StaffApprovalView(interaction.guild_id, interaction.user.id)
@@ -410,15 +408,14 @@ class RankSelect(discord.ui.Select):
 
 
 class RankSelectView(discord.ui.View):
-    def __init__(self, rank_rows: list[tuple[str, int]], player_name: str, player_id: str, nickname: str):
+    def __init__(self, rank_rows: list[tuple[str, int]], player_name: str, player_id: str):
         super().__init__(timeout=120)
-        self.add_item(RankSelect(rank_rows, player_name, player_id, nickname))
+        self.add_item(RankSelect(rank_rows, player_name, player_id))
 
 
 class RecruitForm(discord.ui.Modal, title="Recruit Request"):
     player_name = discord.ui.TextInput(label="Player Name", max_length=64, required=True)
     player_id = discord.ui.TextInput(label="Player ID", max_length=64, required=True)
-    nickname = discord.ui.TextInput(label="Nickname", max_length=32, required=False)
 
     async def on_submit(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -440,7 +437,7 @@ class RecruitForm(discord.ui.Modal, title="Recruit Request"):
             )
             return
 
-        view = RankSelectView(rank_rows, str(self.player_name), str(self.player_id), str(self.nickname))
+        view = RankSelectView(rank_rows, str(self.player_name), str(self.player_id))
         await interaction.response.send_message("Choose your requested rank:", view=view, ephemeral=True)
 
 
@@ -501,12 +498,6 @@ class StaffApprovalView(discord.ui.View):
             unverified_role = interaction.guild.get_role(int(cfg["unverified_role_id"]))
             if unverified_role and unverified_role in member.roles:
                 await member.remove_roles(unverified_role, reason="Recruit approved")
-
-        if recruit[4]:
-            try:
-                await member.edit(nick=str(recruit[4])[:32], reason="Recruit approval nickname")
-            except discord.Forbidden:
-                pass
 
         approve_user(self.guild_id, self.user_id)
 
