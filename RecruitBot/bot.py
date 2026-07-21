@@ -560,12 +560,13 @@ async def setup_channels(
     request_channel: discord.TextChannel,
     approval_channel: discord.TextChannel,
 ):
+    await interaction.response.defer(ephemeral=True)
     set_guild_config(
         interaction.guild_id,
         request_channel_id=request_channel.id,
         approval_channel_id=approval_channel.id,
     )
-    await interaction.response.send_message(
+    await interaction.followup.send(
         f"Configured channels. Requests: {request_channel.mention} | Approvals: {approval_channel.mention}",
         ephemeral=True,
     )
@@ -578,12 +579,13 @@ async def setup_roles(
     staff_role: discord.Role,
     unverified_role: discord.Role,
 ):
+    await interaction.response.defer(ephemeral=True)
     set_guild_config(
         interaction.guild_id,
         staff_role_id=staff_role.id,
         unverified_role_id=unverified_role.id,
     )
-    await interaction.response.send_message(
+    await interaction.followup.send(
         f"Configured roles. Staff: {staff_role.mention} | Unverified: {unverified_role.mention}",
         ephemeral=True,
     )
@@ -593,9 +595,10 @@ async def setup_roles(
 @app_commands.checks.has_permissions(administrator=True)
 @app_commands.describe(channel="Channel to post the request panel in")
 async def request_set(interaction: discord.Interaction, channel: discord.TextChannel | None = None):
+    await interaction.response.defer(ephemeral=True)
     target_channel = channel or interaction.channel
     if not isinstance(target_channel, discord.TextChannel):
-        await interaction.response.send_message("Choose a text channel for the panel.", ephemeral=True)
+        await interaction.followup.send("Choose a text channel for the panel.", ephemeral=True)
         return
 
     embed = discord.Embed(
@@ -604,13 +607,14 @@ async def request_set(interaction: discord.Interaction, channel: discord.TextCha
         color=discord.Color.blurple(),
     )
     await target_channel.send(embed=embed, view=MainButton())
-    await interaction.response.send_message(f"Request panel posted in {target_channel.mention}.", ephemeral=True)
+    await interaction.followup.send(f"Request panel posted in {target_channel.mention}.", ephemeral=True)
 
 
 @setup_group.command(name="status", description="Show RecruitBot configuration status")
 @app_commands.checks.has_permissions(administrator=True)
 async def setup_status(interaction: discord.Interaction):
-    await interaction.response.send_message(embed=setup_status_embed(interaction.guild), ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    await interaction.followup.send(embed=setup_status_embed(interaction.guild), ephemeral=True)
 
 
 @setup_group.command(name="import-backup", description="Import setup config and ranks from a backup recruits.db")
@@ -622,9 +626,10 @@ async def import_backup(
     source_path: str | None = None,
     source_guild_id: app_commands.Range[int, 1, 9223372036854775807] | None = None,
 ):
+    await interaction.response.defer(ephemeral=True)
     backup_path = resolve_backup_db_path(source_path)
     if not backup_path:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "No backup database found. Put a file at `RecruitBot/recruits_backup.db` or pass a path.",
             ephemeral=True,
         )
@@ -637,14 +642,14 @@ async def import_backup(
             source_guild_id=source_guild_id,
         )
     except ValueError as e:
-        await interaction.response.send_message(f"Import failed: {e}", ephemeral=True)
+        await interaction.followup.send(f"Import failed: {e}", ephemeral=True)
         return
     except sqlite3.Error as e:
-        await interaction.response.send_message(f"Database import error: {e}", ephemeral=True)
+        await interaction.followup.send(f"Database import error: {e}", ephemeral=True)
         return
 
     config_msg = "yes" if imported_config else "no"
-    await interaction.response.send_message(
+    await interaction.followup.send(
         "\n".join(
             [
                 "Recruit backup import complete.",
@@ -661,31 +666,34 @@ async def import_backup(
 @bot.tree.command(name="rank-add", description="Add a selectable recruit rank option")
 @app_commands.checks.has_permissions(administrator=True)
 async def rank_add(interaction: discord.Interaction, rank: str, role: discord.Role):
+    await interaction.response.defer(ephemeral=True)
     add_rank_option(interaction.guild_id, rank, role.id)
-    await interaction.response.send_message(f"Added rank option **{rank}** -> {role.mention}", ephemeral=True)
+    await interaction.followup.send(f"Added rank option **{rank}** -> {role.mention}", ephemeral=True)
 
 
 @bot.tree.command(name="rank-remove", description="Remove a selectable recruit rank option")
 @app_commands.checks.has_permissions(administrator=True)
 async def rank_remove(interaction: discord.Interaction, rank: str):
+    await interaction.response.defer(ephemeral=True)
     deleted = remove_rank_option(interaction.guild_id, rank)
     if not deleted:
-        await interaction.response.send_message(f"Rank **{rank}** was not found.", ephemeral=True)
+        await interaction.followup.send(f"Rank **{rank}** was not found.", ephemeral=True)
         return
-    await interaction.response.send_message(f"Removed rank option **{rank}**.", ephemeral=True)
+    await interaction.followup.send(f"Removed rank option **{rank}**.", ephemeral=True)
 
 
 @bot.tree.command(name="ranks", description="View configured recruit rank options")
 async def ranks(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     rows = get_rank_options(interaction.guild_id)
     if not rows:
-        await interaction.response.send_message("No rank options configured yet.", ephemeral=True)
+        await interaction.followup.send("No rank options configured yet.", ephemeral=True)
         return
 
     embed = discord.Embed(title="Recruit Rank Options", color=discord.Color.blurple())
     for name, role_id in rows:
         embed.add_field(name=name, value=f"<@&{role_id}>", inline=False)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 @bot.tree.command(name="recruit_ping", description="Check if RecruitBot is online")
