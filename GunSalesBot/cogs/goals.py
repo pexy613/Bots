@@ -4,8 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.layouts import error_view, goal_list_view, goal_view
-from utils.formatting import money
+from ..utils.layouts import error_view, goal_list_view, goal_view
+from ..utils.formatting import money
 
 
 async def update_live_goal(bot: commands.Bot, guild: discord.Guild) -> None:

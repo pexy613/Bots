@@ -3,9 +3,9 @@ import logging
 import discord
 from discord.ext import commands
 
-from config import DEV_GUILD_ID, DISCORD_TOKEN
-from database import Database
-from seed_data import seed_guild
+from .config import DEV_GUILD_ID, DISCORD_TOKEN
+from .database import Database
+from .seed_data import seed_guild
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("gunsales")
@@ -24,6 +24,7 @@ INITIAL_COGS = [
 class GunSalesBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
+        intents.message_content = True
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
         self.db = Database()
 

@@ -2,8 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.leaderboard import since_for
-from utils.layouts import error_view, profile_view
+from .leaderboard import since_for
+from ..utils.layouts import error_view, profile_view
 
 
 class Profile(commands.Cog):

@@ -3,8 +3,8 @@ from typing import Any, Optional
 
 import aiosqlite
 
-from config import DB_PATH, DEFAULT_COMMISSION_PERCENT
-from utils.formatting import now_iso
+from .config import DB_PATH, DEFAULT_COMMISSION_PERCENT
+from .utils.formatting import now_iso
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (

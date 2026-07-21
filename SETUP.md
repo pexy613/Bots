@@ -24,7 +24,7 @@ git init
 git add .
 git commit -m "Initial commit: unified bot setup"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git remote add origin https://github.com/pexy613/Bots.git
 git push -u origin main
 ```
 
@@ -36,7 +36,7 @@ On your Pebblehost server:
 2. **Clone the repo** in the container root:
 ```bash
 cd /home/container
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git bot-repo
+git clone https://github.com/pexy613/Bots.git bot-repo
 cp -r bot-repo/* ./
 rm -rf bot-repo
 ```

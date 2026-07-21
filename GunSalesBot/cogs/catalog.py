@@ -2,8 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from config import DEFAULT_DISCOUNT_PERCENT, Emoji
-from utils.layouts import catalog_view, error_view
+from ..config import DEFAULT_DISCOUNT_PERCENT, Emoji
+from ..utils.layouts import catalog_view, error_view
 
 
 class Catalog(commands.Cog):

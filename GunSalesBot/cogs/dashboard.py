@@ -2,8 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.leaderboard import since_for
-from utils.layouts import dashboard_view, error_view
+from .leaderboard import since_for
+from ..utils.layouts import dashboard_view, error_view
 
 
 async def _build_dashboard_view(bot: commands.Bot, guild: discord.Guild) -> discord.ui.LayoutView:

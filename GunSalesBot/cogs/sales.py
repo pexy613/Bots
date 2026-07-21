@@ -5,12 +5,12 @@ from discord import SeparatorSpacing, app_commands
 from discord.ext import commands
 from discord.ui import ActionRow, Button, Container, LayoutView, Modal, Section, Select, Separator, TextDisplay, TextInput
 
-from cogs.dashboard import update_live_dashboard
-from cogs.goals import update_live_goal
-from cogs.leaderboard import update_live_leaderboard
-from config import Colors, Emoji
-from utils.layouts import DeleteSaleButton, error_view, notice_view, sale_history_view, sale_receipt_view
-from utils.formatting import money
+from .dashboard import update_live_dashboard
+from .goals import update_live_goal
+from .leaderboard import update_live_leaderboard
+from ..config import Colors, Emoji
+from ..utils.layouts import DeleteSaleButton, error_view, notice_view, sale_history_view, sale_receipt_view
+from ..utils.formatting import money
 
 PANEL_BUTTON_CUSTOM_ID = "gunsales:log_sale_button"
 

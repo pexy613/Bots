@@ -5,7 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.layouts import error_view, leaderboard_view
+from ..utils.layouts import error_view, leaderboard_view
 
 TIMEFRAME_CHOICES = [
     app_commands.Choice(name="Today", value="today"),

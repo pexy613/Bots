@@ -5,8 +5,8 @@ import discord
 from discord import SeparatorSpacing
 from discord.ui import ActionRow, Button, Container, DynamicItem, LayoutView, Section, Separator, TextDisplay, Thumbnail
 
-from config import Colors, Emoji
-from utils.formatting import discord_timestamp, money, percent, progress_bar, rank_medal
+from ..config import Colors, Emoji
+from .formatting import discord_timestamp, money, percent, progress_bar, rank_medal
 
 BRAND = "Black Market Firearms · Sales Ledger"
 
@@ -55,9 +55,9 @@ class DeleteSaleButton(
         )
 
         if interaction.guild:
-            from cogs.dashboard import update_live_dashboard
-            from cogs.goals import update_live_goal
-            from cogs.leaderboard import update_live_leaderboard
+            from ..cogs.dashboard import update_live_dashboard
+            from ..cogs.goals import update_live_goal
+            from ..cogs.leaderboard import update_live_leaderboard
 
             await update_live_leaderboard(interaction.client, interaction.guild)
             await update_live_dashboard(interaction.client, interaction.guild)
@@ -221,7 +221,7 @@ def goal_view(goal, current_amount: float) -> LayoutView:
         TextDisplay(f"Sold so far: **{current_display}**   Target: **{target_display}**")
     )
     if goal["end_at"]:
-        from utils.formatting import parse_iso
+        from .formatting import parse_iso
 
         container.add_item(TextDisplay(f"Deadline: {discord_timestamp(parse_iso(goal['end_at']), 'R')}"))
 
@@ -262,7 +262,7 @@ def profile_view(
 
 
 def sale_history_view(rows: list) -> LayoutView:
-    from utils.formatting import truncate
+    from .formatting import truncate
 
     container = Container(accent_colour=Colors.SALE)
     container.add_item(TextDisplay(f"# {Emoji.SALES} Recent Sales"))
