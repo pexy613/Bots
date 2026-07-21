@@ -69,6 +69,40 @@ def setup_db() -> None:
     conn.close()
 
 
+def backup_db_candidates() -> list[str]:
+    base_dir = os.path.dirname(__file__)
+    repo_root = os.path.dirname(base_dir)
+    return [
+        os.path.join(base_dir, "recruits_backup.db"),
+        os.path.join(base_dir, "recruits.old.db"),
+        os.path.join(repo_root, "recovered_exports", "latest", "RecruitBot", "recruits.db"),
+        os.path.join(repo_root, "recovered_exports", "RecruitBot", "recruits.db"),
+    ]
+
+
+def resolve_backup_db_path(source_path: str | None) -> str | None:
+    if source_path:
+        candidate = source_path.strip()
+        if os.path.isabs(candidate):
+            return candidate if os.path.exists(candidate) else None
+
+        base_dir = os.path.dirname(__file__)
+        repo_root = os.path.dirname(base_dir)
+        relative_paths = [
+            os.path.join(base_dir, candidate),
+            os.path.join(repo_root, candidate),
+        ]
+        for path in relative_paths:
+            if os.path.exists(path):
+                return path
+        return None
+
+    for path in backup_db_candidates():
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def get_conn() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH)
 
@@ -157,6 +191,73 @@ def remove_rank_option(guild_id: int, name: str) -> int:
     conn.commit()
     conn.close()
     return count
+
+
+def import_backup_for_guild(
+    *,
+    source_db_path: str,
+    target_guild_id: int,
+    source_guild_id: int | None = None,
+) -> tuple[int, bool, int]:
+    """Import setup config and rank options from a backup recruits.db."""
+    src = sqlite3.connect(source_db_path)
+    src.row_factory = sqlite3.Row
+    cur = src.cursor()
+
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = {row[0] for row in cur.fetchall()}
+    if "guild_config" not in tables and "rank_options" not in tables:
+        src.close()
+        raise ValueError("Backup database does not contain expected RecruitBot tables.")
+
+    resolved_source_guild_id = source_guild_id
+    if resolved_source_guild_id is None:
+        cur.execute("SELECT guild_id FROM guild_config LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            resolved_source_guild_id = int(row[0])
+        else:
+            cur.execute("SELECT guild_id FROM rank_options LIMIT 1")
+            row = cur.fetchone()
+            if row:
+                resolved_source_guild_id = int(row[0])
+
+    if resolved_source_guild_id is None:
+        resolved_source_guild_id = target_guild_id
+
+    imported_config = False
+    if "guild_config" in tables:
+        cur.execute(
+            """
+            SELECT request_channel_id, approval_channel_id, staff_role_id, unverified_role_id
+            FROM guild_config
+            WHERE guild_id = ?
+            """,
+            (resolved_source_guild_id,),
+        )
+        row = cur.fetchone()
+        if row:
+            set_guild_config(
+                target_guild_id,
+                request_channel_id=row[0],
+                approval_channel_id=row[1],
+                staff_role_id=row[2],
+                unverified_role_id=row[3],
+            )
+            imported_config = True
+
+    imported_ranks = 0
+    if "rank_options" in tables:
+        cur.execute(
+            "SELECT name, role_id FROM rank_options WHERE guild_id = ?",
+            (resolved_source_guild_id,),
+        )
+        for row in cur.fetchall():
+            add_rank_option(target_guild_id, row["name"], int(row["role_id"]))
+            imported_ranks += 1
+
+    src.close()
+    return resolved_source_guild_id, imported_config, imported_ranks
 
 
 def get_recruit(guild_id: int, user_id: int):
@@ -512,6 +613,51 @@ async def setup_status(interaction: discord.Interaction):
     await interaction.response.send_message(embed=setup_status_embed(interaction.guild), ephemeral=True)
 
 
+@setup_group.command(name="import-backup", description="Import setup config and ranks from a backup recruits.db")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(source_path="Optional file path. Defaults to known backup locations.")
+@app_commands.describe(source_guild_id="Optional guild ID from backup to import from.")
+async def import_backup(
+    interaction: discord.Interaction,
+    source_path: str | None = None,
+    source_guild_id: app_commands.Range[int, 1, 9223372036854775807] | None = None,
+):
+    backup_path = resolve_backup_db_path(source_path)
+    if not backup_path:
+        await interaction.response.send_message(
+            "No backup database found. Put a file at `RecruitBot/recruits_backup.db` or pass a path.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        used_guild_id, imported_config, imported_ranks = import_backup_for_guild(
+            source_db_path=backup_path,
+            target_guild_id=interaction.guild_id,
+            source_guild_id=source_guild_id,
+        )
+    except ValueError as e:
+        await interaction.response.send_message(f"Import failed: {e}", ephemeral=True)
+        return
+    except sqlite3.Error as e:
+        await interaction.response.send_message(f"Database import error: {e}", ephemeral=True)
+        return
+
+    config_msg = "yes" if imported_config else "no"
+    await interaction.response.send_message(
+        "\n".join(
+            [
+                "Recruit backup import complete.",
+                f"Source DB: `{backup_path}`",
+                f"Source guild ID: `{used_guild_id}`",
+                f"Imported config: `{config_msg}`",
+                f"Imported rank options: `{imported_ranks}`",
+            ]
+        ),
+        ephemeral=True,
+    )
+
+
 @bot.tree.command(name="rank-add", description="Add a selectable recruit rank option")
 @app_commands.checks.has_permissions(administrator=True)
 async def rank_add(interaction: discord.Interaction, rank: str, role: discord.Role):
@@ -578,6 +724,7 @@ async def on_ready():
 @setup_roles.error
 @request_set.error
 @setup_status.error
+@import_backup.error
 @rank_add.error
 @rank_remove.error
 async def admin_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
