@@ -624,7 +624,7 @@ async def setup_status(interaction: discord.Interaction):
 async def import_backup(
     interaction: discord.Interaction,
     source_path: str | None = None,
-    source_guild_id: app_commands.Range[int, 1, 9223372036854775807] | None = None,
+    source_guild_id: app_commands.Range[int, 1, 900719925474099] | None = None,
 ):
     await interaction.response.defer(ephemeral=True)
     backup_path = resolve_backup_db_path(source_path)
