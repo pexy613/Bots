@@ -11,13 +11,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("gunsales")
 
 INITIAL_COGS = [
-    "cogs.settings",
-    "cogs.catalog",
-    "cogs.sales",
-    "cogs.leaderboard",
-    "cogs.dashboard",
-    "cogs.goals",
-    "cogs.profile",
+    "GunSalesBot.cogs.settings",
+    "GunSalesBot.cogs.catalog",
+    "GunSalesBot.cogs.sales",
+    "GunSalesBot.cogs.leaderboard",
+    "GunSalesBot.cogs.dashboard",
+    "GunSalesBot.cogs.goals",
+    "GunSalesBot.cogs.profile",
 ]
 
 
