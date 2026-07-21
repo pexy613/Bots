@@ -281,9 +281,9 @@ def upsert_recruit(
     user_id: int,
     player_name: str,
     player_id: str,
-    rank_name: str,
-    rank_role_id: int,
-    nickname: str,
+    rank_name: str | None,
+    rank_role_id: int | None,
+    nickname: str = "",
 ) -> None:
     conn = get_conn()
     cur = conn.cursor()
@@ -305,6 +305,17 @@ def approve_user(guild_id: int, user_id: int) -> None:
     cur.execute(
         "UPDATE recruits SET approved = 1 WHERE guild_id = ? AND user_id = ?",
         (guild_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def set_recruit_rank(guild_id: int, user_id: int, rank_name: str, rank_role_id: int) -> None:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE recruits SET rank_name = ?, rank_role_id = ? WHERE guild_id = ? AND user_id = ?",
+        (rank_name, rank_role_id, guild_id, user_id),
     )
     conn.commit()
     conn.close()
@@ -343,74 +354,27 @@ def setup_status_embed(guild: discord.Guild) -> discord.Embed:
     return embed
 
 
-class RankSelect(discord.ui.Select):
-    def __init__(self, rank_rows: list[tuple[str, int]], player_name: str, player_id: str):
-        self.player_name = player_name
-        self.player_id = player_id
+class ApprovalRankSelect(discord.ui.Select):
+    def __init__(self, parent_view: "StaffApprovalView", rank_rows: list[tuple[str, int]]):
+        self.parent_view = parent_view
         options = [
             discord.SelectOption(label=name[:100], value=f"{name}|{role_id}")
             for name, role_id in rank_rows[:25]
         ]
-        super().__init__(placeholder="Choose a rank", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Admin: choose rank before approving", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.guild:
-            await interaction.response.send_message("This can only be used inside a server.", ephemeral=True)
+        if not self.parent_view._can_review(interaction):
+            await interaction.response.send_message("Only staff/admin can select the approval rank.", ephemeral=True)
             return
 
-        selected = self.values[0]
-        rank_name, role_id = selected.rsplit("|", 1)
-        role_id = int(role_id)
-
-        existing = get_recruit(interaction.guild_id, interaction.user.id)
-        now = int(time.time())
-        if existing and existing[5] == 0 and now - int(existing[6] or 0) < RESUBMIT_SECONDS:
-            wait_for = RESUBMIT_SECONDS - (now - int(existing[6] or 0))
-            await interaction.response.send_message(
-                f"You already submitted a request. Try again in {wait_for} seconds.",
-                ephemeral=True,
-            )
-            return
-
-        if existing and existing[5] == 1:
-            await interaction.response.send_message("You are already approved.", ephemeral=True)
-            return
-
-        upsert_recruit(
-            interaction.guild_id,
-            interaction.user.id,
-            self.player_name,
-            self.player_id,
-            rank_name,
-            role_id,
-            "",
+        rank_name, role_id = self.values[0].rsplit("|", 1)
+        self.parent_view.selected_rank_name = rank_name
+        self.parent_view.selected_rank_role_id = int(role_id)
+        await interaction.response.send_message(
+            f"Selected rank for this request: **{rank_name}**",
+            ephemeral=True,
         )
-
-        cfg = get_guild_config(interaction.guild_id)
-        approval_channel = interaction.guild.get_channel(int(cfg["approval_channel_id"])) if cfg["approval_channel_id"] else None
-        if not isinstance(approval_channel, discord.TextChannel):
-            await interaction.response.send_message(
-                "Request saved, but approval channel is missing. Ask staff to run /setup channels.",
-                ephemeral=True,
-            )
-            return
-
-        embed = discord.Embed(title="Recruit Request", color=discord.Color.orange())
-        embed.add_field(name="Member", value=interaction.user.mention, inline=False)
-        embed.add_field(name="Player", value=self.player_name, inline=True)
-        embed.add_field(name="Player ID", value=self.player_id, inline=True)
-        embed.add_field(name="Rank", value=rank_name, inline=True)
-        embed.set_footer(text=f"Guild {interaction.guild_id} | User {interaction.user.id}")
-
-        view = StaffApprovalView(interaction.guild_id, interaction.user.id)
-        await approval_channel.send(embed=embed, view=view)
-        await interaction.response.send_message("Request submitted. Staff will review it.", ephemeral=True)
-
-
-class RankSelectView(discord.ui.View):
-    def __init__(self, rank_rows: list[tuple[str, int]], player_name: str, player_id: str):
-        super().__init__(timeout=120)
-        self.add_item(RankSelect(rank_rows, player_name, player_id))
 
 
 class RecruitForm(discord.ui.Modal, title="Recruit Request"):
@@ -437,8 +401,49 @@ class RecruitForm(discord.ui.Modal, title="Recruit Request"):
             )
             return
 
-        view = RankSelectView(rank_rows, str(self.player_name), str(self.player_id))
-        await interaction.response.send_message("Choose your requested rank:", view=view, ephemeral=True)
+        existing = get_recruit(interaction.guild_id, interaction.user.id)
+        now = int(time.time())
+        if existing and existing[5] == 0 and now - int(existing[6] or 0) < RESUBMIT_SECONDS:
+            wait_for = RESUBMIT_SECONDS - (now - int(existing[6] or 0))
+            await interaction.response.send_message(
+                f"You already submitted a request. Try again in {wait_for} seconds.",
+                ephemeral=True,
+            )
+            return
+
+        if existing and existing[5] == 1:
+            await interaction.response.send_message("You are already approved.", ephemeral=True)
+            return
+
+        upsert_recruit(
+            interaction.guild_id,
+            interaction.user.id,
+            str(self.player_name),
+            str(self.player_id),
+            None,
+            None,
+            "",
+        )
+
+        cfg = get_guild_config(interaction.guild_id)
+        approval_channel = interaction.guild.get_channel(int(cfg["approval_channel_id"])) if cfg["approval_channel_id"] else None
+        if not isinstance(approval_channel, discord.TextChannel):
+            await interaction.response.send_message(
+                "Request saved, but approval channel is missing. Ask staff to run /setup channels.",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(title="Recruit Request", color=discord.Color.orange())
+        embed.add_field(name="Member", value=interaction.user.mention, inline=False)
+        embed.add_field(name="Player", value=str(self.player_name), inline=True)
+        embed.add_field(name="Player ID", value=str(self.player_id), inline=True)
+        embed.add_field(name="Selected Rank", value="Pending staff selection", inline=True)
+        embed.set_footer(text=f"Guild {interaction.guild_id} | User {interaction.user.id}")
+
+        view = StaffApprovalView(interaction.guild_id, interaction.user.id)
+        await approval_channel.send(embed=embed, view=view)
+        await interaction.response.send_message("Request submitted. Staff will review it in the approval channel.", ephemeral=True)
 
 
 class MainButton(discord.ui.View):
@@ -459,6 +464,12 @@ class StaffApprovalView(discord.ui.View):
         super().__init__(timeout=REQUEST_EXPIRY_SECONDS)
         self.guild_id = guild_id
         self.user_id = user_id
+        self.selected_rank_name: str | None = None
+        self.selected_rank_role_id: int | None = None
+
+        rank_rows = get_rank_options(guild_id)
+        if rank_rows:
+            self.add_item(ApprovalRankSelect(self, rank_rows))
 
     def _can_review(self, interaction: discord.Interaction) -> bool:
         if not interaction.guild:
@@ -484,13 +495,26 @@ class StaffApprovalView(discord.ui.View):
             await interaction.response.send_message("Request record was not found.", ephemeral=True)
             return
 
+        if not self.selected_rank_name or not self.selected_rank_role_id:
+            await interaction.response.send_message(
+                "Select a rank from the dropdown first, then click Approve.",
+                ephemeral=True,
+            )
+            return
+
         member = interaction.guild.get_member(self.user_id)
         if not member:
             await interaction.response.send_message("User is no longer in this server.", ephemeral=True)
             return
 
         cfg = get_guild_config(self.guild_id)
-        rank_role = interaction.guild.get_role(int(recruit[3])) if recruit[3] else None
+        rank_role = interaction.guild.get_role(int(self.selected_rank_role_id))
+        if not rank_role:
+            await interaction.response.send_message(
+                "Selected rank role no longer exists. Choose another rank.",
+                ephemeral=True,
+            )
+            return
         if rank_role:
             await member.add_roles(rank_role, reason="Recruit request approved")
 
@@ -499,10 +523,12 @@ class StaffApprovalView(discord.ui.View):
             if unverified_role and unverified_role in member.roles:
                 await member.remove_roles(unverified_role, reason="Recruit approved")
 
+        set_recruit_rank(self.guild_id, self.user_id, self.selected_rank_name, self.selected_rank_role_id)
         approve_user(self.guild_id, self.user_id)
 
         embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else discord.Embed()
         embed.color = discord.Color.green()
+        embed.set_field_at(3, name="Selected Rank", value=self.selected_rank_name, inline=True)
         embed.add_field(name="Approved", value=f"by {interaction.user.mention}", inline=False)
         await interaction.response.edit_message(embed=embed, view=None)
 
