@@ -38,8 +38,10 @@ async def start_recruitbot():
     """Import and run RecruitBot."""
     try:
         print("[LAUNCHER] Starting RecruitBot...")
-        from RecruitBot.bot import main as recruitbot_main
+        from RecruitBot.bot import async_main as recruitbot_main
         await recruitbot_main()
+    except SystemExit as e:
+        print(f"[LAUNCHER] RecruitBot disabled: {e}")
     except ImportError:
         print("[LAUNCHER] ⚠️  RecruitBot not found locally. Skipping.")
     except Exception as e:
