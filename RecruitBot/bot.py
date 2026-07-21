@@ -769,6 +769,27 @@ async def admin_command_error(interaction: discord.Interaction, error: app_comma
         await interaction.response.send_message(msg, ephemeral=True)
 
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    """Global fallback so slash-command failures never look like silent timeouts."""
+    log.exception("RecruitBot tree error", exc_info=error)
+
+    if isinstance(error, app_commands.CommandInvokeError) and error.original:
+        detail = f"{type(error.original).__name__}: {error.original}"
+    else:
+        detail = f"{type(error).__name__}: {error}"
+
+    msg = f"RecruitBot error: {detail[:1800]}"
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+    except Exception:
+        # Last-resort: never crash the handler itself.
+        log.exception("Failed to send tree error response")
+
+
 bot.tree.add_command(setup_group)
 
 
