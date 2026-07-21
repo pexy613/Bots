@@ -1,6 +1,6 @@
 """
 Unified launcher for all bots.
-Starts GangBot, GunSalesBot, and RecruitBot concurrently.
+Starts GangBot and GunSalesBot, and optionally RecruitBot if present.
 """
 
 import asyncio
@@ -47,15 +47,24 @@ async def start_recruitbot():
         raise
 
 
+def recruitbot_exists() -> bool:
+    """Return True when RecruitBot source exists in this repository."""
+    return os.path.exists(os.path.join(WORKSPACE_ROOT, "RecruitBot", "bot.py"))
+
+
 async def main():
     """Start all bots concurrently."""
     print("[LAUNCHER] 🚀 Starting bot launcher...")
-    
+
     tasks = [
         asyncio.create_task(start_gangbot()),
         asyncio.create_task(start_gunsalesbot()),
-        asyncio.create_task(start_recruitbot()),
     ]
+
+    if recruitbot_exists():
+        tasks.append(asyncio.create_task(start_recruitbot()))
+    else:
+        print("[LAUNCHER] RecruitBot folder not present. Skipping RecruitBot startup.")
     
     # Wait for all bots (continue if one fails)
     await asyncio.gather(*tasks, return_exceptions=True)
