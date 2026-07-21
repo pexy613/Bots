@@ -16,7 +16,7 @@ async def start_gangbot():
     """Import and run GangBot."""
     try:
         print("[LAUNCHER] Starting GangBot...")
-        from GangBot_v2_real.bot import main as gangbot_main
+        from bot import main as gangbot_main
         await gangbot_main()
     except Exception as e:
         print(f"[LAUNCHER] ❌ GangBot failed to start: {e}")
@@ -27,7 +27,7 @@ async def start_gunsalesbot():
     """Import and run GunSalesBot."""
     try:
         print("[LAUNCHER] Starting GunSalesBot...")
-        from GunSalesBot_upload.bot import async_main as gunsalesbot_main
+        from GunSalesBot.bot import async_main as gunsalesbot_main
         await gunsalesbot_main()
     except Exception as e:
         print(f"[LAUNCHER] ❌ GunSalesBot failed to start: {e}")
