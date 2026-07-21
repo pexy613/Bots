@@ -728,10 +728,37 @@ async def on_ready():
 @rank_add.error
 @rank_remove.error
 async def admin_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    log.exception("RecruitBot command error", exc_info=error)
+
     if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("You need administrator permission to use this.", ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send("You need administrator permission to use this.", ephemeral=True)
+        else:
+            await interaction.response.send_message("You need administrator permission to use this.", ephemeral=True)
         return
-    raise error
+
+    if isinstance(error, app_commands.BotMissingPermissions):
+        perms = ", ".join(error.missing_permissions)
+        msg = f"RecruitBot is missing permissions: {perms}"
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    if isinstance(error, app_commands.CommandOnCooldown):
+        msg = f"Command is on cooldown. Try again in {error.retry_after:.1f}s."
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    msg = f"RecruitBot command failed: {type(error).__name__}"
+    if interaction.response.is_done():
+        await interaction.followup.send(msg, ephemeral=True)
+    else:
+        await interaction.response.send_message(msg, ephemeral=True)
 
 
 bot.tree.add_command(setup_group)
