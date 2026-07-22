@@ -63,3 +63,7 @@ htmlcov/
 # Bot-specific
 data/
 *.bak
+
+# Local debug/recovery artifacts
+inspect_commands.py
+recovered_exports/

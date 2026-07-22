@@ -69,6 +69,30 @@ Then on Pebblehost:
 1. Restart the server from Pebblehost panel.
 2. [start.py](start.py) will pull latest `main` automatically.
 
+### Rollback Procedure (Hotfix Safety)
+
+If a deployment causes issues, roll back to a known good commit:
+
+1. Find a stable commit hash from GitHub commits.
+2. In your local repo, roll back and push:
+
+```bash
+git checkout main
+git reset --hard <stable_commit_hash>
+git push --force-with-lease origin main
+```
+
+3. Restart Pebblehost so [start.py](start.py) pulls the rolled-back version.
+4. After recovery, create a new fix commit instead of reusing broken commits.
+
+If you prefer no forced push, use a revert commit:
+
+```bash
+git checkout main
+git revert <bad_commit_hash>
+git push origin main
+```
+
 ## Directory Structure
 
 ```
