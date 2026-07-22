@@ -47,6 +47,12 @@ async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
     try:
+        # Cleanup old guild-scoped command copies that can appear as duplicates
+        # after moving commands to global sync.
+        if SYNC_GUILD:
+            bot.tree.clear_commands(guild=SYNC_GUILD)
+            await bot.tree.sync(guild=SYNC_GUILD)
+
         synced = await bot.tree.sync()
         print(f"✅ Synced {len(synced)} slash command(s) globally.")
         print("Slash commands registered:", ", ".join(sorted(command.name for command in synced)))
