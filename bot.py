@@ -47,12 +47,9 @@ async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
     try:
-        if SYNC_GUILD:
-            synced = await bot.tree.sync(guild=SYNC_GUILD)
-            print(f"✅ Synced {len(synced)} slash command(s) to guild {SYNC_GUILD.id}.")
-        else:
-            synced = await bot.tree.sync()
-            print(f"✅ Synced {len(synced)} slash command(s) globally.")
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} slash command(s) globally.")
+        print("Slash commands registered:", ", ".join(sorted(command.name for command in synced)))
     except Exception as exc:
         print(f"⚠️ Slash command sync failed: {exc}")
 
