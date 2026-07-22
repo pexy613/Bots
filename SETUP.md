@@ -30,24 +30,17 @@ git push -u origin main
 
 ### 4. Configure Pebblehost for Auto-Sync
 
-On your Pebblehost server:
+Your repository already includes auto-sync logic in [start.py](start.py):
+- It runs `git pull origin main` on each startup.
+- It reinstalls dependencies from `requirements.txt`.
+- Then it starts [launcher.py](launcher.py).
 
-1. **SSH into the container** via Pebblehost's SFTP/Console
-2. **Clone the repo** in the container root:
-```bash
-cd /home/container
-git clone https://github.com/pexy613/Bots.git bot-repo
-cp -r bot-repo/* ./
-rm -rf bot-repo
-```
+Set Pebblehost to use these settings:
+- **Bot Language**: Python
+- **Bot Start File**: `start.py`
+- **Python Version**: 3.13+
 
-3. **Update Bot Settings** in Pebblehost:
-   - **Bot Language**: Python
-   - **Bot Start File**: `launcher.py`
-   - **Python Version**: 3.13+
-
-4. **Add Auto-Pull Script** (optional but recommended):
-   Create a startup script that pulls latest changes before starting bots.
+After this is set, every restart will auto-pull your latest GitHub commits.
 
 ### 5. Environment Variables
 
@@ -73,10 +66,8 @@ git push
 ```
 
 Then on Pebblehost:
-1. Go to Console
-2. Run: `git pull && restart`
-
-Or set up a webhook for automatic deployments (ask if you need help).
+1. Restart the server from Pebblehost panel.
+2. [start.py](start.py) will pull latest `main` automatically.
 
 ## Directory Structure
 
