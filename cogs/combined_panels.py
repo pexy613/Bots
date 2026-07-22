@@ -22,7 +22,7 @@ _GUNSALES_DB_PATH = os.path.join(_BASE_DIR, "GunSalesBot", "data", "gunsales.db"
 
 
 def _parse_target_guild_id() -> Optional[int]:
-    raw = (os.getenv("COMBINED_PANELS_GUILD_ID") or "").strip()
+    raw = (os.getenv("COMBINED_PANELS_GUILD_ID") or os.getenv("DEV_GUILD_ID") or "").strip()
     if not raw:
         return None
     try:
@@ -33,7 +33,14 @@ def _parse_target_guild_id() -> Optional[int]:
 
 
 _TARGET_GUILD_ID = _parse_target_guild_id()
-_TARGET_GUILD = discord.Object(id=_TARGET_GUILD_ID or 1)
+_TARGET_GUILD = discord.Object(id=_TARGET_GUILD_ID) if _TARGET_GUILD_ID else None
+_GUILD_DECORATOR = app_commands.guilds(_TARGET_GUILD) if _TARGET_GUILD else (lambda command: command)
+
+
+def _guild_scope_for_command():
+    if _TARGET_GUILD_ID:
+        return app_commands.guilds(discord.Object(id=_TARGET_GUILD_ID))
+    return lambda command: command
 
 
 def _enabled_for_guild(guild_id: int) -> bool:
@@ -271,7 +278,17 @@ async def update_live_combined_leaderboard(bot: commands.Bot, guild_id: int):
 class CombinedPanelsCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.refresh_panels.change_interval(seconds=60)
         self.refresh_panels.start()
+
+    async def cog_load(self):
+        self.bot.tree.add_command(self.combineddashboard)
+        self.bot.tree.add_command(self.setupcombineddashboard)
+        self.bot.tree.add_command(self.resetcombineddashboard)
+        self.bot.tree.add_command(self.combinedleaderboard)
+        self.bot.tree.add_command(self.setupcombinedleaderboard)
+        self.bot.tree.add_command(self.resetcombinedleaderboard)
+        print("[combined_panels] registered commands: combineddashboard, setupcombineddashboard, resetcombineddashboard, combinedleaderboard, setupcombinedleaderboard, resetcombinedleaderboard")
 
     def cog_unload(self):
         self.refresh_panels.cancel()
@@ -300,7 +317,7 @@ class CombinedPanelsCog(commands.Cog):
     async def before_refresh_panels(self):
         await self.bot.wait_until_ready()
 
-    @app_commands.guilds(_TARGET_GUILD)
+    @_guild_scope_for_command()
     @app_commands.command(name="combineddashboard", description="Show combined gun+washes dashboard (this server only).")
     async def combineddashboard(self, interaction: discord.Interaction):
         if not await self._can_use(interaction):
@@ -309,7 +326,7 @@ class CombinedPanelsCog(commands.Cog):
             embed=build_combined_dashboard_embed(interaction.guild, interaction.guild_id)
         )
 
-    @app_commands.guilds(_TARGET_GUILD)
+    @_guild_scope_for_command()
     @app_commands.command(name="setupcombineddashboard", description="Create a live combined dashboard panel (this server only).")
     async def setupcombineddashboard(self, interaction: discord.Interaction):
         if not await self._can_use(interaction):
@@ -321,7 +338,7 @@ class CombinedPanelsCog(commands.Cog):
         database.save_setting(interaction.guild_id, _SETTINGS["dashboard_message"], str(message.id))
         await interaction.followup.send("✅ Live combined dashboard created for this server.", ephemeral=True)
 
-    @app_commands.guilds(_TARGET_GUILD)
+    @_guild_scope_for_command()
     @app_commands.command(name="resetcombineddashboard", description="Reset the live combined dashboard panel (this server only).")
     async def resetcombineddashboard(self, interaction: discord.Interaction):
         if not await self._can_use(interaction):
@@ -343,7 +360,7 @@ class CombinedPanelsCog(commands.Cog):
         database.save_setting(interaction.guild_id, _SETTINGS["dashboard_message"], "")
         await interaction.followup.send("✅ Combined dashboard reset for this server.", ephemeral=True)
 
-    @app_commands.guilds(_TARGET_GUILD)
+    @_guild_scope_for_command()
     @app_commands.command(name="combinedleaderboard", description="Show combined gun+washes leaderboard (this server only).")
     async def combinedleaderboard(self, interaction: discord.Interaction):
         if not await self._can_use(interaction):
@@ -352,7 +369,7 @@ class CombinedPanelsCog(commands.Cog):
             embed=build_combined_leaderboard_embed(interaction.guild, interaction.guild_id)
         )
 
-    @app_commands.guilds(_TARGET_GUILD)
+    @_guild_scope_for_command()
     @app_commands.command(name="setupcombinedleaderboard", description="Create a live combined leaderboard panel (this server only).")
     async def setupcombinedleaderboard(self, interaction: discord.Interaction):
         if not await self._can_use(interaction):
@@ -364,7 +381,7 @@ class CombinedPanelsCog(commands.Cog):
         database.save_setting(interaction.guild_id, _SETTINGS["leaderboard_message"], str(message.id))
         await interaction.followup.send("✅ Live combined leaderboard created for this server.", ephemeral=True)
 
-    @app_commands.guilds(_TARGET_GUILD)
+    @_guild_scope_for_command()
     @app_commands.command(name="resetcombinedleaderboard", description="Reset the live combined leaderboard panel (this server only).")
     async def resetcombinedleaderboard(self, interaction: discord.Interaction):
         if not await self._can_use(interaction):
@@ -389,5 +406,5 @@ class CombinedPanelsCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     if _TARGET_GUILD_ID is None:
-        raise RuntimeError("COMBINED_PANELS_GUILD_ID is not set or invalid.")
+        print("Combined panels: no target guild configured; commands will be available globally and gated by server checks.")
     await bot.add_cog(CombinedPanelsCog(bot))

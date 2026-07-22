@@ -7,11 +7,33 @@ from dotenv import load_dotenv
 import database
 
 load_dotenv()
-TOKEN = os.getenv("TOKEN")
-COMBINED_PANELS_GUILD_ID = os.getenv("COMBINED_PANELS_GUILD_ID")
+
+
+def _read_token() -> str:
+    for key in ("TOKEN", "DISCORD_TOKEN", "BOT_TOKEN"):
+        value = (os.getenv(key) or "").strip().strip('"').strip("'")
+        if value:
+            return value
+    return ""
+
+
+TOKEN = _read_token()
+COMBINED_PANELS_GUILD_ID = (os.getenv("COMBINED_PANELS_GUILD_ID") or os.getenv("DEV_GUILD_ID") or "").strip()
+
+
+def _get_sync_guild():
+    if not COMBINED_PANELS_GUILD_ID:
+        return None
+    try:
+        return discord.Object(id=int(COMBINED_PANELS_GUILD_ID))
+    except ValueError:
+        return None
+
+
+SYNC_GUILD = _get_sync_guild()
 
 if not TOKEN:
-    raise RuntimeError("TOKEN is missing. Create a .env file and add TOKEN=your_bot_token_here")
+    raise RuntimeError("No Discord bot token found. Add TOKEN=... or DISCORD_TOKEN=... to your .env file")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -24,8 +46,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
-    synced = await bot.tree.sync()
-    print(f"✅ Synced {len(synced)} slash command(s).")
+    try:
+        if SYNC_GUILD:
+            synced = await bot.tree.sync(guild=SYNC_GUILD)
+            print(f"✅ Synced {len(synced)} slash command(s) to guild {SYNC_GUILD.id}.")
+        else:
+            synced = await bot.tree.sync()
+            print(f"✅ Synced {len(synced)} slash command(s) globally.")
+    except Exception as exc:
+        print(f"⚠️ Slash command sync failed: {exc}")
 
 
 async def main():
@@ -42,8 +71,7 @@ async def main():
         await bot.load_extension("cogs.admin")
         await bot.load_extension("cogs.panel")
         await bot.load_extension("cogs.goals")
-        if COMBINED_PANELS_GUILD_ID:
-            await bot.load_extension("cogs.combined_panels")
+        await bot.load_extension("cogs.combined_panels")
         await bot.start(TOKEN)
 
 
