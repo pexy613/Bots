@@ -281,15 +281,6 @@ class CombinedPanelsCog(commands.Cog):
         self.refresh_panels.change_interval(seconds=60)
         self.refresh_panels.start()
 
-    async def cog_load(self):
-        self.bot.tree.add_command(self.combineddashboard)
-        self.bot.tree.add_command(self.setupcombineddashboard)
-        self.bot.tree.add_command(self.resetcombineddashboard)
-        self.bot.tree.add_command(self.combinedleaderboard)
-        self.bot.tree.add_command(self.setupcombinedleaderboard)
-        self.bot.tree.add_command(self.resetcombinedleaderboard)
-        print("[combined_panels] registered commands: combineddashboard, setupcombineddashboard, resetcombineddashboard, combinedleaderboard, setupcombinedleaderboard, resetcombinedleaderboard")
-
     def cog_unload(self):
         self.refresh_panels.cancel()
 
