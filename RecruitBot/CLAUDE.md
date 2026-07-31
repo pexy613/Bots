@@ -1,0 +1,1 @@
+This subdirectory's Supabase schema is `recruit_bot`. Only read/write tables in this schema from code under `RecruitBot/`. Never touch tables outside this schema (this overrides the root CLAUDE.md's `Laundering_bot` restriction for this subtree only).

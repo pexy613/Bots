@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
 load_dotenv()
 TOKEN = os.getenv("RECRUITBOT_TOKEN")
@@ -15,6 +16,10 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "recruits.db")
 
 REQUEST_EXPIRY_SECONDS = 24 * 60 * 60
 RESUBMIT_SECONDS = 10 * 60
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("recruitbot")
@@ -329,6 +334,46 @@ def delete_user(guild_id: int, user_id: int) -> None:
     conn.close()
 
 
+# --- Supabase mirror (recruit_bot.recruits) -------------------------------
+# Best-effort writes: recruits.db above remains the bot's source of truth
+# for live logic (expiry checks, staff gating, etc). These calls mirror the
+# same events into Supabase and never raise into the caller if the network
+# call fails.
+
+def supabase_save_pending(guild_id: int, user_id: int, player_name: str, player_id: str, submitted_at: int) -> None:
+    try:
+        supabase.schema("recruit_bot").table("recruits").upsert({
+            "guild_id": guild_id,
+            "user_id": user_id,
+            "player_name": player_name,
+            "player_id": player_id,
+            "submitted_at": submitted_at,
+        }).execute()
+    except Exception:
+        log.exception("Supabase save_pending failed for %s/%s", guild_id, user_id)
+
+
+def supabase_approve_user(guild_id: int, user_id: int, rank_name: str, rank_role_id: int, nickname: str) -> None:
+    try:
+        supabase.schema("recruit_bot").table("recruits").update({
+            "rank_name": rank_name,
+            "rank_role_id": rank_role_id,
+            "nickname": nickname,
+            "approved": True,
+        }).eq("guild_id", guild_id).eq("user_id", user_id).execute()
+    except Exception:
+        log.exception("Supabase approve_user failed for %s/%s", guild_id, user_id)
+
+
+def supabase_delete_user(guild_id: int, user_id: int) -> None:
+    try:
+        supabase.schema("recruit_bot").table("recruits").delete().eq(
+            "guild_id", guild_id
+        ).eq("user_id", user_id).execute()
+    except Exception:
+        log.exception("Supabase delete_user failed for %s/%s", guild_id, user_id)
+
+
 def is_configured(guild_id: int) -> bool:
     cfg = get_guild_config(guild_id)
     return bool(cfg["request_channel_id"] and cfg["approval_channel_id"] and cfg["staff_role_id"])
@@ -415,6 +460,7 @@ class RecruitForm(discord.ui.Modal, title="Recruit Request"):
             await interaction.response.send_message("You are already approved.", ephemeral=True)
             return
 
+        submitted_at = int(time.time())
         upsert_recruit(
             interaction.guild_id,
             interaction.user.id,
@@ -423,6 +469,13 @@ class RecruitForm(discord.ui.Modal, title="Recruit Request"):
             None,
             None,
             "",
+        )
+        supabase_save_pending(
+            interaction.guild_id,
+            interaction.user.id,
+            str(self.player_name),
+            str(self.player_id),
+            submitted_at,
         )
 
         cfg = get_guild_config(interaction.guild_id)
@@ -532,6 +585,7 @@ class StaffApprovalView(discord.ui.View):
         # Format nickname as: Player Name | Player ID (max Discord nickname length is 32).
         player_name = str(recruit[0] or "").strip()
         player_id = str(recruit[1] or "").strip()
+        nickname = ""
         if player_name and player_id:
             suffix = f" | {player_id}"
             max_name_len = max(0, 32 - len(suffix))
@@ -544,6 +598,13 @@ class StaffApprovalView(discord.ui.View):
 
         set_recruit_rank(self.guild_id, self.user_id, self.selected_rank_name, self.selected_rank_role_id)
         approve_user(self.guild_id, self.user_id)
+        supabase_approve_user(
+            self.guild_id,
+            self.user_id,
+            self.selected_rank_name,
+            self.selected_rank_role_id,
+            nickname,
+        )
 
         await interaction.response.defer(ephemeral=True)
         if interaction.message:
@@ -567,6 +628,7 @@ class StaffApprovalView(discord.ui.View):
             return
 
         delete_user(self.guild_id, self.user_id)
+        supabase_delete_user(self.guild_id, self.user_id)
 
         await interaction.response.defer(ephemeral=True)
         if interaction.message:
@@ -765,6 +827,7 @@ async def on_member_join(member: discord.Member):
 @bot.event
 async def on_member_remove(member: discord.Member):
     delete_user(member.guild.id, member.id)
+    supabase_delete_user(member.guild.id, member.id)
 
 
 @bot.event
