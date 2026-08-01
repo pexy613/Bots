@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from ..supabase_mirror import supabase_upsert_settings
 from ..utils.layouts import error_view, settings_view
 
 
@@ -18,6 +19,7 @@ class Settings(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def commission(self, interaction: discord.Interaction, percent: app_commands.Range[float, 0, 100]):
         await self.bot.db.set_commission(str(interaction.guild_id), percent)
+        supabase_upsert_settings(await self.bot.db.get_settings(str(interaction.guild_id)))
         await interaction.response.send_message(f"💰 Commission set to **{percent}%** for future sales.")
 
     @config_group.command(name="logchannel", description="[Admin] Set a channel where every sale receipt is also posted")
@@ -25,6 +27,7 @@ class Settings(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def logchannel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         await self.bot.db.set_log_channel(str(interaction.guild_id), str(channel.id))
+        supabase_upsert_settings(await self.bot.db.get_settings(str(interaction.guild_id)))
         await interaction.response.send_message(f"📌 Sale receipts will also be posted in {channel.mention}.")
 
     @config_group.command(name="show", description="Show the current bot configuration")

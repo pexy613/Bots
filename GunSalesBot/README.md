@@ -32,8 +32,9 @@ leaderboards, a live dashboard, dealer profiles, and server-wide sales goals.
    python bot.py
    ```
 
-The weapon catalog you gave me (AP Pistol, Desert Eagle, FN Pistol, G3, M1911, Mossberg Shotgun,
-QBZ 95, Sniper, Stun Gun, TAR 21) is seeded automatically into any server the bot joins.
+The weapon catalog you gave me (AK74, AP Pistol, AWM Magnum, Desert Eagle, FN Seven, G3, M16, M1911,
+M249, Mossberg Shotgun, MTAR 21, QBZ 95, Sig Sauer 556, Stun Gun, Tec 9) is seeded automatically into
+any server the bot joins.
 
 ## Commands
 
@@ -52,6 +53,11 @@ QBZ 95, Sniper, Stun Gun, TAR 21) is seeded automatically into any server the bo
 **Catalog**
 - `/catalog view` — the full price list, grouped by category.
 - `/catalog add` / `/catalog edit` / `/catalog remove` *(admin)* — manage weapons and prices.
+- `/catalog sync-defaults` *(admin)* — reconciles this server's catalog against the bot's built-in
+  default price list (`seed_data.DEFAULT_CATALOG`): adds anything missing, updates prices/category/
+  emoji on name matches, and deactivates anything no longer in the list. Existing sales history is
+  never touched (removed weapons are deactivated, not deleted). Run this after a deploy that changes
+  the default catalog — new prices only auto-seed into brand-new servers, not ones already stocked.
 
 **Stats**
 - `/leaderboard panel` *(admin, run once per channel)* — posts a live leaderboard (lifetime,
@@ -79,9 +85,13 @@ Admin commands require the **Manage Server** permission.
 
 ## Data
 
-Everything is stored locally in `data/gunsales.db` (SQLite) — no external services required.
+Everything is stored locally in `data/gunsales.db` (SQLite) — this is the bot's source of truth.
 Back that file up if you care about sales history; deleting it wipes all sales, goals, and any
 catalog edits (the default catalog will simply be reseeded on next startup).
+
+Sales, settings, and goals are also mirrored best-effort into Supabase (`gun_bot` schema — see
+`SUPABASE_URL`/`SUPABASE_KEY`, shared with GangBot's wash logger and RecruitBot). SQLite stays
+authoritative; a Supabase write failure is logged and never blocks the Discord-facing command.
 
 ## Notes on the numbers
 

@@ -9,7 +9,15 @@ from .dashboard import update_live_dashboard
 from .goals import update_live_goal
 from .leaderboard import update_live_leaderboard
 from ..config import Colors, Emoji
-from ..utils.layouts import DeleteSaleButton, error_view, notice_view, sale_history_view, sale_receipt_view
+from ..supabase_mirror import supabase_upsert_sale, supabase_delete_sale
+from ..utils.layouts import (
+    DeleteSaleButton,
+    add_price_list,
+    error_view,
+    notice_view,
+    sale_history_view,
+    sale_receipt_view,
+)
 from ..utils.formatting import money
 
 PANEL_BUTTON_CUSTOM_ID = "gunsales:log_sale_button"
@@ -44,6 +52,7 @@ async def _create_sale(
         seller_id=str(credited.id),
         seller_name=str(credited),
     )
+    supabase_upsert_sale(await bot.db.get_sale(sale_id))
     return {
         "sale_id": sale_id,
         "settings": settings,
@@ -82,7 +91,8 @@ async def _repost_panel(bot: commands.Bot, channel, old_panel_message_id: int) -
         await old_panel.delete()
     except (discord.NotFound, discord.Forbidden):
         pass
-    await channel.send(view=LogSalePanelView(bot))
+    guns = await bot.db.list_guns(str(channel.guild.id))
+    await channel.send(view=LogSalePanelView(bot, guns))
 
 
 # ---------- sale builder (opened by the panel button) ----------
@@ -324,7 +334,7 @@ class LogSaleButton(Button):
 
 
 class LogSalePanelView(LayoutView):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, guns: list = None):
         super().__init__(timeout=None)
         container = Container(accent_colour=Colors.SALE)
         container.add_item(
@@ -334,6 +344,9 @@ class LogSalePanelView(LayoutView):
                 accessory=LogSaleButton(bot),
             )
         )
+        if guns:
+            container.add_item(Separator(spacing=SeparatorSpacing.small))
+            add_price_list(container, guns)
         self.add_item(container)
 
 
@@ -350,7 +363,8 @@ class Sales(commands.Cog):
     @sale_group.command(name="panel", description="[Admin] Post a persistent Log Sale button in this channel")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def panel(self, interaction: discord.Interaction):
-        await interaction.response.send_message(view=LogSalePanelView(self.bot))
+        guns = await self.bot.db.list_guns(str(interaction.guild_id))
+        await interaction.response.send_message(view=LogSalePanelView(self.bot, guns))
 
     @sale_group.command(name="history", description="Show recent logged sales")
     @app_commands.describe(seller="Only show sales from this seller", limit="How many to show (max 25)")
@@ -404,6 +418,7 @@ class Sales(commands.Cog):
             total_amount=new_total,
             profit=new_profit,
         )
+        supabase_upsert_sale(await self.bot.db.get_sale(sale_id))
         await interaction.response.send_message(
             f"✏️ Updated sale `#{sale_id}` — now {money(new_total)} ({new_quantity}x @ {money(new_unit_price)})."
         )
@@ -421,6 +436,7 @@ class Sales(commands.Cog):
             await interaction.response.send_message(view=error_view("Sale not found."), ephemeral=True)
             return
         await self.bot.db.delete_sale(sale_id)
+        supabase_delete_sale(sale_id)
         await interaction.response.send_message(f"🗑️ Deleted sale `#{sale_id}`.")
         if interaction.guild:
             await update_live_leaderboard(self.bot, interaction.guild)

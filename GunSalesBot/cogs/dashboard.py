@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from .leaderboard import since_for
+from ..supabase_mirror import supabase_upsert_settings
 from ..utils.layouts import dashboard_view, error_view
 
 
@@ -37,6 +38,7 @@ async def update_live_dashboard(bot: commands.Bot, guild: discord.Guild) -> None
         message = await channel.fetch_message(int(message_id))
     except (discord.NotFound, discord.Forbidden):
         await bot.db.set_dashboard_panel(str(guild.id), None, None)
+        supabase_upsert_settings(await bot.db.get_settings(str(guild.id)))
         return
 
     view = await _build_dashboard_view(bot, guild)
@@ -68,6 +70,7 @@ class Dashboard(commands.Cog):
         await self.bot.db.set_dashboard_panel(
             str(interaction.guild_id), str(interaction.channel_id), str(message.id)
         )
+        supabase_upsert_settings(await self.bot.db.get_settings(str(interaction.guild_id)))
 
     @panel.error
     async def admin_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

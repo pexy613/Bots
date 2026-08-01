@@ -7,6 +7,11 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DEV_GUILD_ID = os.getenv("DEV_GUILD_ID") or None
 
+# Shared Supabase project (same SUPABASE_URL/SUPABASE_KEY as GangBot's wash
+# logger and RecruitBot) — this bot only ever touches the gun_bot schema.
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "gunsales.db")
 
 DEFAULT_COMMISSION_PERCENT = 20.0

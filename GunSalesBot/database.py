@@ -371,6 +371,10 @@ class Database:
         await self.conn.commit()
         return cur.lastrowid
 
+    async def get_goal(self, goal_id: int) -> Optional[aiosqlite.Row]:
+        cur = await self.conn.execute("SELECT * FROM goals WHERE id = ?", (goal_id,))
+        return await cur.fetchone()
+
     async def get_active_goal(self, guild_id: str) -> Optional[aiosqlite.Row]:
         cur = await self.conn.execute(
             "SELECT * FROM goals WHERE guild_id = ? AND active = 1 ORDER BY id DESC LIMIT 1",

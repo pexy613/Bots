@@ -6,6 +6,7 @@ from discord import SeparatorSpacing
 from discord.ui import ActionRow, Button, Container, DynamicItem, LayoutView, Section, Separator, TextDisplay, Thumbnail
 
 from ..config import Colors, Emoji
+from ..supabase_mirror import supabase_delete_sale
 from .formatting import discord_timestamp, money, percent, progress_bar, rank_medal
 
 BRAND = "Black Market Firearms · Sales Ledger"
@@ -49,6 +50,7 @@ class DeleteSaleButton(
                 view=error_view("This sale was already deleted."), ephemeral=True
             )
             return
+        supabase_delete_sale(self.sale_id)
 
         await interaction.edit_original_response(
             view=notice_view(f"🗑️ Sale `#{self.sale_id}` deleted by {interaction.user.mention}.", Colors.ERROR)
@@ -115,30 +117,43 @@ def sale_receipt_view(
     return _view(container)
 
 
+def guns_by_category(guns: list) -> dict:
+    """Groups guns by category, preserving first-seen order — the single source of
+    truth for how a price list is organized, shared by the catalog view and the
+    log-sale panel so both always show the same thing."""
+    by_category: dict[str, list] = {}
+    for gun in guns:
+        by_category.setdefault(gun["category"] or "Uncategorized", []).append(gun)
+    return by_category
+
+
+def category_price_block(category: str, items: list) -> str:
+    lines = [f"### {Emoji.CATEGORY} {category}"]
+    for gun in items:
+        ally_price = round(gun["price"] * (1 - gun["discount_percent"] / 100))
+        lines.append(
+            f"{gun['emoji']} **{gun['name']}** — {money(gun['price'])}\n"
+            f"　Ally min ({percent(gun['discount_percent'])} off): {money(ally_price)}"
+        )
+    return "\n".join(lines)
+
+
+def add_price_list(container: Container, guns: list) -> None:
+    """Appends one price block per category to `container`, with separators between them."""
+    first = True
+    for category, items in guns_by_category(guns).items():
+        if not first:
+            container.add_item(Separator(spacing=SeparatorSpacing.small, visible=False))
+        first = False
+        container.add_item(TextDisplay(category_price_block(category, items)))
+
+
 def catalog_view(guild_name: str, guns: list) -> LayoutView:
     container = Container(accent_colour=Colors.CATALOG)
     container.add_item(TextDisplay(f"# {Emoji.GUN} Weapon Catalog"))
     container.add_item(TextDisplay(f"Current price list for **{guild_name}**"))
     container.add_item(Separator(spacing=SeparatorSpacing.small))
-
-    by_category: dict[str, list] = {}
-    for gun in guns:
-        by_category.setdefault(gun["category"] or "Uncategorized", []).append(gun)
-
-    first = True
-    for category, items in by_category.items():
-        if not first:
-            container.add_item(Separator(spacing=SeparatorSpacing.small, visible=False))
-        first = False
-        lines = [f"### {Emoji.CATEGORY} {category}"]
-        for gun in items:
-            ally_price = round(gun["price"] * (1 - gun["discount_percent"] / 100))
-            lines.append(
-                f"{gun['emoji']} **{gun['name']}** — {money(gun['price'])}\n"
-                f"　Ally min ({percent(gun['discount_percent'])} off): {money(ally_price)}"
-            )
-        container.add_item(TextDisplay("\n".join(lines)))
-
+    add_price_list(container, guns)
     container.add_item(Separator(spacing=SeparatorSpacing.small))
     container.add_item(_footer())
     return _view(container)

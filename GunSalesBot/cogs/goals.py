@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from ..supabase_mirror import supabase_upsert_goal
 from ..utils.layouts import error_view, goal_list_view, goal_view
 from ..utils.formatting import money
 
@@ -54,6 +55,8 @@ class Goals(commands.Cog):
         if deadline_days:
             end_at = (datetime.now(timezone.utc) + timedelta(days=deadline_days)).isoformat()
 
+        previous_goal = await self.bot.db.get_active_goal(str(interaction.guild_id))
+
         await self.bot.db.create_goal(
             guild_id=str(interaction.guild_id),
             name="Weapon Sales Goal",
@@ -67,6 +70,10 @@ class Goals(commands.Cog):
         await interaction.response.send_message(view=goal_view(goal, current))
         message = await interaction.original_response()
         await self.bot.db.set_goal_panel(goal["id"], str(interaction.channel_id), str(message.id))
+
+        if previous_goal:
+            supabase_upsert_goal(await self.bot.db.get_goal(previous_goal["id"]))
+        supabase_upsert_goal(await self.bot.db.get_goal(goal["id"]))
 
     @goal_group.command(name="progress", description="Show progress on the active weapon sales goal")
     async def progress(self, interaction: discord.Interaction):
@@ -91,6 +98,7 @@ class Goals(commands.Cog):
             return
         current = await self.bot.db.goal_current_amount(goal)
         await self.bot.db.end_goal(goal["id"])
+        supabase_upsert_goal(await self.bot.db.get_goal(goal["id"]))
 
         if goal["panel_channel_id"] and goal["panel_message_id"]:
             channel = interaction.guild.get_channel(int(goal["panel_channel_id"]))

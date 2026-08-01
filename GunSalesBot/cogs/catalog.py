@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from ..config import DEFAULT_DISCOUNT_PERCENT, Emoji
+from ..seed_data import DEFAULT_CATALOG
 from ..utils.layouts import catalog_view, error_view
 
 
@@ -104,6 +105,59 @@ class Catalog(commands.Cog):
             return
         await interaction.response.send_message(f"{Emoji.GUN} Updated **{name}**.")
 
+    @catalog_group.command(
+        name="sync-defaults",
+        description="[Admin] Sync this server's catalog to the bot's current default price list",
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def sync_defaults(self, interaction: discord.Interaction):
+        guild_id = str(interaction.guild_id)
+        existing = {g["name"].lower(): g for g in await self.bot.db.list_guns(guild_id)}
+        target_names = {item["name"].lower() for item in DEFAULT_CATALOG}
+
+        added, updated, removed = [], [], []
+        for item in DEFAULT_CATALOG:
+            row = existing.get(item["name"].lower())
+            if row is None:
+                await self.bot.db.add_gun(
+                    guild_id=guild_id,
+                    name=item["name"],
+                    price=item["price"],
+                    discount_percent=DEFAULT_DISCOUNT_PERCENT,
+                    category=item["category"],
+                    emoji=item["emoji"],
+                )
+                added.append(item["name"])
+            elif (
+                row["price"] != item["price"]
+                or row["category"] != item["category"]
+                or row["emoji"] != item["emoji"]
+            ):
+                await self.bot.db.edit_gun(
+                    guild_id,
+                    row["name"],
+                    price=item["price"],
+                    category=item["category"],
+                    emoji=item["emoji"],
+                )
+                updated.append(item["name"])
+
+        for name_lower, row in existing.items():
+            if name_lower not in target_names:
+                await self.bot.db.remove_gun(guild_id, row["name"])
+                removed.append(row["name"])
+
+        lines = []
+        if added:
+            lines.append(f"**Added:** {', '.join(added)}")
+        if updated:
+            lines.append(f"**Updated:** {', '.join(updated)}")
+        if removed:
+            lines.append(f"**Removed:** {', '.join(removed)} (deactivated, not deleted — history is kept)")
+        if not lines:
+            lines.append("Already up to date.")
+        await interaction.response.send_message(f"{Emoji.GUN} Catalog synced.\n" + "\n".join(lines))
+
     @catalog_group.command(name="remove", description="[Admin] Remove a weapon from the catalog")
     @app_commands.describe(name="Weapon to remove")
     @app_commands.autocomplete(name=gun_autocomplete)
@@ -120,6 +174,7 @@ class Catalog(commands.Cog):
     @add.error
     @edit.error
     @remove.error
+    @sync_defaults.error
     async def admin_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message(

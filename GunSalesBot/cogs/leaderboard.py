@@ -5,6 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from ..supabase_mirror import supabase_upsert_settings
 from ..utils.layouts import error_view, leaderboard_view
 
 TIMEFRAME_CHOICES = [
@@ -68,6 +69,7 @@ async def update_live_leaderboard(bot: commands.Bot, guild: discord.Guild) -> No
         message = await channel.fetch_message(int(message_id))
     except (discord.NotFound, discord.Forbidden):
         await bot.db.set_leaderboard_panel(str(guild.id), None, None)
+        supabase_upsert_settings(await bot.db.get_settings(str(guild.id)))
         return
 
     rows = await bot.db.leaderboard(str(guild.id), metric=LIVE_METRIC, limit=10)
@@ -116,6 +118,7 @@ class Leaderboard(commands.Cog):
         await self.bot.db.set_leaderboard_panel(
             str(interaction.guild_id), str(interaction.channel_id), str(message.id)
         )
+        supabase_upsert_settings(await self.bot.db.get_settings(str(interaction.guild_id)))
 
     @panel.error
     async def admin_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
