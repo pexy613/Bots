@@ -1,0 +1,58 @@
+GunSalesBot — what to upload to PebbleHost
+===========================================
+
+UPLOAD THESE:
+-------------
+bot.py
+database.py
+config.py
+seed_data.py
+requirements.txt
+.env.example
+
+cogs/
+  __init__.py
+  catalog.py
+  dashboard.py
+  goals.py
+  leaderboard.py
+  profile.py
+  sales.py
+  settings.py
+
+utils/
+  __init__.py
+  formatting.py
+  layouts.py
+
+README.md   (optional — docs only, not required to run)
+
+
+DO NOT UPLOAD:
+--------------
+venv/                       PebbleHost installs dependencies itself from requirements.txt
+data/gunsales.db            Your live sales/goals/catalog history — overwriting this wipes it
+data/gunsales.db-shm
+data/gunsales.db-wal
+.env                        Contains your real bot token — see note below
+__pycache__/ (if any)
+
+
+ABOUT THE TOKEN:
+----------------
+Don't upload your real .env if you can avoid it. If PebbleHost has an environment
+variable / secrets panel, set DISCORD_TOKEN there instead. If you must upload a
+.env file, create it fresh on the host with your token — don't reuse a file that's
+been shared anywhere else.
+
+
+FIRST-TIME SETUP ON A FRESH HOST:
+----------------------------------
+If this is a brand new PebbleHost instance (no existing data/gunsales.db), you don't
+need to upload a database file at all — bot.py creates data/gunsales.db automatically
+on first run and seeds the default weapon catalog.
+
+If you're migrating an EXISTING bot that already has sales history, re-upload
+data/gunsales.db (and the -shm/-wal files if present) so you don't lose it — that's
+the one exception to the "don't upload data/" rule above, and only applies when
+you're replacing a bot that was already running with real data.
