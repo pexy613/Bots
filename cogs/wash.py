@@ -1,8 +1,14 @@
 import asyncio
 import time
 import re
+import os
+import logging
+from datetime import datetime, timezone
+
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
 import database
 from utils import format_money, can_manage
@@ -10,6 +16,35 @@ from ui import create_embed
 from cogs.live_dashboard import update_live_dashboard
 from cogs.leaderboard import update_live_leaderboard
 from cogs.combined_panels import update_live_combined_dashboard, update_live_combined_leaderboard
+
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+log = logging.getLogger("wash")
+
+
+# --- Supabase mirror (Laundering_bot.transactions) -------------------------
+# Best-effort write: washes.db above remains the bot's source of truth for
+# live logic (dashboards, leaderboards, delete button, etc). This call mirrors
+# each logged wash into Supabase and never raises into the caller if the
+# network call fails.
+
+def supabase_log_transaction(discord_user_id: int, discord_username: str, amount_processed: float,
+                              fee_percent: float, net_profit: float, logged_at: str) -> None:
+    try:
+        supabase.schema("Laundering_bot").table("transactions").insert({
+            "discord_user_id": discord_user_id,
+            "discord_username": discord_username,
+            "amount_processed": amount_processed,
+            "fee_percent": fee_percent,
+            "net_profit": net_profit,
+            "logged_at": logged_at,
+        }).execute()
+    except Exception:
+        log.exception("Supabase log_transaction failed for %s", discord_user_id)
 
 
 class DeleteWashButton(discord.ui.DynamicItem[discord.ui.Button], template=r"delete_wash:(?P<wash_id>[0-9]+)"):
@@ -296,6 +331,15 @@ class WashSelectionView(discord.ui.View):
         delete_view = discord.ui.View(timeout=None)
         delete_view.add_item(DeleteWashButton(wash_id))
         await interaction.response.send_message(embed=embed, view=delete_view)
+
+        supabase_log_transaction(
+            interaction.user.id,
+            str(interaction.user),
+            amount_washed,
+            percentage_taken,
+            profit_taken,
+            datetime.now(timezone.utc).isoformat(),
+        )
 
         await update_live_dashboard(interaction.client, interaction.guild_id)
         await update_live_leaderboard(interaction.client, interaction.guild_id)
