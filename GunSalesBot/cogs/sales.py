@@ -12,7 +12,6 @@ from ..config import Colors, Emoji
 from ..supabase_mirror import supabase_upsert_sale, supabase_delete_sale
 from ..utils.layouts import (
     DeleteSaleButton,
-    add_price_list,
     error_view,
     notice_view,
     sale_history_view,
@@ -334,7 +333,7 @@ class LogSaleButton(Button):
 
 
 class LogSalePanelView(LayoutView):
-    def __init__(self, bot: commands.Bot, guns: list = None):
+    def __init__(self, bot: commands.Bot):
         super().__init__(timeout=None)
         container = Container(accent_colour=Colors.SALE)
         container.add_item(
@@ -344,9 +343,6 @@ class LogSalePanelView(LayoutView):
                 accessory=LogSaleButton(bot),
             )
         )
-        if guns:
-            container.add_item(Separator(spacing=SeparatorSpacing.small))
-            add_price_list(container, guns)
         self.add_item(container)
 
 
@@ -363,8 +359,7 @@ class Sales(commands.Cog):
     @sale_group.command(name="panel", description="[Admin] Post a persistent Log Sale button in this channel")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def panel(self, interaction: discord.Interaction):
-        guns = await self.bot.db.list_guns(str(interaction.guild_id))
-        await interaction.response.send_message(view=LogSalePanelView(self.bot, guns))
+        await interaction.response.send_message(view=LogSalePanelView(self.bot))
 
     @sale_group.command(name="history", description="Show recent logged sales")
     @app_commands.describe(seller="Only show sales from this seller", limit="How many to show (max 25)")
