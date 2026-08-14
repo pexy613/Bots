@@ -58,12 +58,12 @@ bot = GunSalesBot()
 async def on_ready():
     log.info("Logged in as %s (ID: %s)", bot.user, bot.user.id)
     for guild in bot.guilds:
-        await seed_guild(bot.db, str(guild.id))
+        await seed_guild(bot, str(guild.id))
 
 
 @bot.event
 async def on_guild_join(guild: discord.Guild):
-    await seed_guild(bot.db, str(guild.id))
+    await seed_guild(bot, str(guild.id))
 
 
 def main():

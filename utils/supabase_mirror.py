@@ -143,6 +143,29 @@ async def mirror_settings(bot, guild_id: str) -> None:
         log.warning("Failed to mirror settings for guild %s to Supabase", guild_id, exc_info=True)
 
 
+async def mirror_gun(bot, guild_id: str, name: str) -> None:
+    row = await bot.db.get_gun_any(guild_id, name)
+    if row is None:
+        return
+    try:
+        await bot.supabase.upsert(
+            "guns",
+            {
+                "id": row["id"],
+                "guild_id": int(row["guild_id"]),
+                "name": row["name"],
+                "category": row["category"],
+                "price": row["price"],
+                "discount_percent": row["discount_percent"],
+                "emoji": row["emoji"],
+                "active": row["active"],
+            },
+            on_conflict="id",
+        )
+    except Exception:
+        log.warning("Failed to mirror gun %r for guild %s to Supabase", name, guild_id, exc_info=True)
+
+
 async def mirror_goal(bot, goal) -> None:
     if goal is None:
         return

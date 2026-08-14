@@ -173,13 +173,14 @@ class Database:
         discount_percent: float,
         category: Optional[str],
         emoji: str,
-    ):
-        await self.conn.execute(
+    ) -> int:
+        cur = await self.conn.execute(
             """INSERT INTO guns (guild_id, name, category, price, discount_percent, emoji)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (guild_id, name, category, price, discount_percent, emoji),
         )
         await self.conn.commit()
+        return cur.lastrowid
 
     async def edit_gun(self, guild_id: str, name: str, **fields: Any) -> bool:
         if not fields:
@@ -202,6 +203,13 @@ class Database:
     async def get_gun(self, guild_id: str, name: str) -> Optional[aiosqlite.Row]:
         cur = await self.conn.execute(
             "SELECT * FROM guns WHERE guild_id = ? AND name = ? AND active = 1", (guild_id, name)
+        )
+        return await cur.fetchone()
+
+    async def get_gun_any(self, guild_id: str, name: str) -> Optional[aiosqlite.Row]:
+        """Like get_gun but ignores active status — used for mirroring after edits/removal."""
+        cur = await self.conn.execute(
+            "SELECT * FROM guns WHERE guild_id = ? AND name = ?", (guild_id, name)
         )
         return await cur.fetchone()
 

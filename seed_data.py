@@ -1,5 +1,7 @@
 """Initial weapon catalog seeded into a guild the first time the bot sees it."""
 
+from utils.supabase_mirror import mirror_gun
+
 DEFAULT_CATALOG = [
     {"name": "AK74", "price": 230_000, "category": "Rifle", "emoji": "🎯"},
     {"name": "AP Pistol", "price": 15_000_000, "category": "Pistol", "emoji": "🔫"},
@@ -21,12 +23,12 @@ DEFAULT_CATALOG = [
 DEFAULT_DISCOUNT_PERCENT = 25.0
 
 
-async def seed_guild(db, guild_id: str):
-    existing = await db.list_guns(guild_id, active_only=False)
+async def seed_guild(bot, guild_id: str):
+    existing = await bot.db.list_guns(guild_id, active_only=False)
     if existing:
         return
     for gun in DEFAULT_CATALOG:
-        await db.add_gun(
+        await bot.db.add_gun(
             guild_id=guild_id,
             name=gun["name"],
             price=gun["price"],
@@ -34,3 +36,4 @@ async def seed_guild(db, guild_id: str):
             category=gun["category"],
             emoji=gun["emoji"],
         )
+        await mirror_gun(bot, guild_id, gun["name"])

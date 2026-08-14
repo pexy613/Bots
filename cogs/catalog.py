@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from config import DEFAULT_DISCOUNT_PERCENT, Emoji
 from utils.layouts import catalog_view, error_view
+from utils.supabase_mirror import mirror_gun
 
 
 class Catalog(commands.Cog):
@@ -60,6 +61,7 @@ class Catalog(commands.Cog):
             category=category,
             emoji=emoji,
         )
+        await mirror_gun(self.bot, str(interaction.guild_id), name)
         await interaction.response.send_message(f"{Emoji.GUN} Added **{name}** to the catalog.")
 
     @catalog_group.command(name="edit", description="[Admin] Edit a weapon's catalog entry")
@@ -102,6 +104,7 @@ class Catalog(commands.Cog):
                 view=error_view(f"No weapon named **{name}** found."), ephemeral=True
             )
             return
+        await mirror_gun(self.bot, str(interaction.guild_id), name)
         await interaction.response.send_message(f"{Emoji.GUN} Updated **{name}**.")
 
     @catalog_group.command(name="remove", description="[Admin] Remove a weapon from the catalog")
@@ -115,6 +118,7 @@ class Catalog(commands.Cog):
                 view=error_view(f"No weapon named **{name}** found."), ephemeral=True
             )
             return
+        await mirror_gun(self.bot, str(interaction.guild_id), name)
         await interaction.response.send_message(f"🗑️ Removed **{name}** from the catalog.")
 
     @add.error
