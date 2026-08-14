@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from ..config import DEFAULT_DISCOUNT_PERCENT, Emoji
 from ..seed_data import DEFAULT_CATALOG
+from ..supabase_mirror import supabase_upsert_gun
 from ..utils.layouts import catalog_view, error_view
 
 
@@ -61,6 +62,7 @@ class Catalog(commands.Cog):
             category=category,
             emoji=emoji,
         )
+        supabase_upsert_gun(await self.bot.db.get_gun_any(str(interaction.guild_id), name))
         await interaction.response.send_message(f"{Emoji.GUN} Added **{name}** to the catalog.")
 
     @catalog_group.command(name="edit", description="[Admin] Edit a weapon's catalog entry")
@@ -103,6 +105,7 @@ class Catalog(commands.Cog):
                 view=error_view(f"No weapon named **{name}** found."), ephemeral=True
             )
             return
+        supabase_upsert_gun(await self.bot.db.get_gun_any(str(interaction.guild_id), name))
         await interaction.response.send_message(f"{Emoji.GUN} Updated **{name}**.")
 
     @catalog_group.command(
@@ -127,6 +130,7 @@ class Catalog(commands.Cog):
                     category=item["category"],
                     emoji=item["emoji"],
                 )
+                supabase_upsert_gun(await self.bot.db.get_gun_any(guild_id, item["name"]))
                 added.append(item["name"])
             elif (
                 row["price"] != item["price"]
@@ -140,11 +144,13 @@ class Catalog(commands.Cog):
                     category=item["category"],
                     emoji=item["emoji"],
                 )
+                supabase_upsert_gun(await self.bot.db.get_gun_any(guild_id, row["name"]))
                 updated.append(item["name"])
 
         for name_lower, row in existing.items():
             if name_lower not in target_names:
                 await self.bot.db.remove_gun(guild_id, row["name"])
+                supabase_upsert_gun(await self.bot.db.get_gun_any(guild_id, row["name"]))
                 removed.append(row["name"])
 
         lines = []
@@ -169,6 +175,7 @@ class Catalog(commands.Cog):
                 view=error_view(f"No weapon named **{name}** found."), ephemeral=True
             )
             return
+        supabase_upsert_gun(await self.bot.db.get_gun_any(str(interaction.guild_id), name))
         await interaction.response.send_message(f"🗑️ Removed **{name}** from the catalog.")
 
     @add.error

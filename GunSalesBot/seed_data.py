@@ -1,5 +1,7 @@
 """Initial weapon catalog seeded into a guild the first time the bot sees it."""
 
+from .supabase_mirror import supabase_upsert_gun
+
 DEFAULT_CATALOG = [
     {"name": "AK74", "price": 230_000, "category": "Rifle", "emoji": "🎯"},
     {"name": "AP Pistol", "price": 15_000_000, "category": "Pistol", "emoji": "🔫"},
@@ -34,3 +36,4 @@ async def seed_guild(db, guild_id: str):
             category=gun["category"],
             emoji=gun["emoji"],
         )
+        supabase_upsert_gun(await db.get_gun_any(guild_id, gun["name"]))

@@ -72,6 +72,27 @@ def supabase_delete_sale(sale_id: int) -> None:
         log.exception("Supabase delete_sale failed for sale #%s", sale_id)
 
 
+def supabase_upsert_gun(gun) -> None:
+    if gun is None:
+        return
+    try:
+        supabase.schema("gun_bot").table("guns").upsert(
+            {
+                "id": gun["id"],
+                "guild_id": int(gun["guild_id"]),
+                "name": gun["name"],
+                "category": gun["category"],
+                "price": gun["price"],
+                "discount_percent": gun["discount_percent"],
+                "emoji": gun["emoji"],
+                "active": gun["active"],
+            },
+            on_conflict="id",
+        ).execute()
+    except Exception:
+        log.exception("Supabase upsert_gun failed for gun #%s", gun["id"])
+
+
 def supabase_upsert_goal(goal) -> None:
     if goal is None:
         return
