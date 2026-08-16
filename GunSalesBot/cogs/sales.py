@@ -90,8 +90,7 @@ async def _repost_panel(bot: commands.Bot, channel, old_panel_message_id: int) -
         await old_panel.delete()
     except (discord.NotFound, discord.Forbidden):
         pass
-    guns = await bot.db.list_guns(str(channel.guild.id))
-    await channel.send(view=LogSalePanelView(bot, guns))
+    await channel.send(view=LogSalePanelView(bot))
 
 
 # ---------- sale builder (opened by the panel button) ----------
@@ -321,7 +320,7 @@ class LogSaleButton(Button):
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
-        guns = await self.bot.db.list_guns(str(interaction.guild_id))
+        guns = await self.bot.db.list_guns(str(interaction.guild_id), sellable_only=True)
         if not guns:
             await interaction.response.send_message(
                 view=error_view("No weapons in the catalog yet. Ask an admin to run `/catalog add`."),

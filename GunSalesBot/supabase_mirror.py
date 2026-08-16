@@ -86,6 +86,8 @@ def supabase_upsert_gun(gun) -> None:
                 "discount_percent": gun["discount_percent"],
                 "emoji": gun["emoji"],
                 "active": gun["active"],
+                "sellable": gun["sellable"],
+                "price_label": gun["price_label"],
             },
             on_conflict="id",
         ).execute()

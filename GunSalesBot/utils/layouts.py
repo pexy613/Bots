@@ -135,13 +135,10 @@ def catalog_embed(guild_name: str, guns: list) -> discord.Embed:
         timestamp=datetime.now(timezone.utc),
     )
     for category, items in guns_by_category(guns).items():
-        lines = []
-        for gun in items:
-            ally_price = round(gun["price"] * (1 - gun["discount_percent"] / 100))
-            lines.append(
-                f"{gun['emoji']} **{gun['name']}** — {money(gun['price'])}\n"
-                f"　Ally ({percent(gun['discount_percent'])} off): {money(ally_price)}"
-            )
+        lines = [
+            f"{gun['emoji']} **{gun['name']}** — {gun['price_label'] or money(gun['price'])}"
+            for gun in items
+        ]
         embed.add_field(name=f"{Emoji.CATEGORY} {category}", value="\n".join(lines), inline=True)
     embed.set_footer(text=BRAND)
     return embed
