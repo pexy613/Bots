@@ -118,45 +118,33 @@ def sale_receipt_view(
 
 
 def guns_by_category(guns: list) -> dict:
-    """Groups guns by category, preserving first-seen order — the single source of
-    truth for how a price list is organized, shared by the catalog view and the
-    log-sale panel so both always show the same thing."""
+    """Groups guns by category, preserving first-seen order."""
     by_category: dict[str, list] = {}
     for gun in guns:
         by_category.setdefault(gun["category"] or "Uncategorized", []).append(gun)
     return by_category
 
 
-def category_price_block(category: str, items: list) -> str:
-    lines = [f"### {Emoji.CATEGORY} {category}"]
-    for gun in items:
-        ally_price = round(gun["price"] * (1 - gun["discount_percent"] / 100))
-        lines.append(
-            f"{gun['emoji']} **{gun['name']}** — {money(gun['price'])}\n"
-            f"　Ally min ({percent(gun['discount_percent'])} off): {money(ally_price)}"
-        )
-    return "\n".join(lines)
-
-
-def add_price_list(container: Container, guns: list) -> None:
-    """Appends one price block per category to `container`, with separators between them."""
-    first = True
+def catalog_embed(guild_name: str, guns: list) -> discord.Embed:
+    """One boxed field per category, laid out in Discord's inline-field grid —
+    read as a set of separate price boards instead of one long scrolling list."""
+    embed = discord.Embed(
+        title=f"{Emoji.GUN} Weapon Catalog",
+        description=f"Current price list for **{guild_name}**",
+        colour=Colors.CATALOG,
+        timestamp=datetime.now(timezone.utc),
+    )
     for category, items in guns_by_category(guns).items():
-        if not first:
-            container.add_item(Separator(spacing=SeparatorSpacing.small, visible=False))
-        first = False
-        container.add_item(TextDisplay(category_price_block(category, items)))
-
-
-def catalog_view(guild_name: str, guns: list) -> LayoutView:
-    container = Container(accent_colour=Colors.CATALOG)
-    container.add_item(TextDisplay(f"# {Emoji.GUN} Weapon Catalog"))
-    container.add_item(TextDisplay(f"Current price list for **{guild_name}**"))
-    container.add_item(Separator(spacing=SeparatorSpacing.small))
-    add_price_list(container, guns)
-    container.add_item(Separator(spacing=SeparatorSpacing.small))
-    container.add_item(_footer())
-    return _view(container)
+        lines = []
+        for gun in items:
+            ally_price = round(gun["price"] * (1 - gun["discount_percent"] / 100))
+            lines.append(
+                f"{gun['emoji']} **{gun['name']}** — {money(gun['price'])}\n"
+                f"　Ally ({percent(gun['discount_percent'])} off): {money(ally_price)}"
+            )
+        embed.add_field(name=f"{Emoji.CATEGORY} {category}", value="\n".join(lines), inline=True)
+    embed.set_footer(text=BRAND)
+    return embed
 
 
 def leaderboard_view(timeframe_label: str, metric_label: str, rows: list) -> LayoutView:
