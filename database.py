@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS guns (
     discount_percent REAL NOT NULL DEFAULT 25,
     emoji TEXT NOT NULL DEFAULT '🔫',
     active INTEGER NOT NULL DEFAULT 1,
+    sellable INTEGER NOT NULL DEFAULT 1,
+    price_label TEXT,
     UNIQUE(guild_id, name)
 );
 
@@ -105,6 +107,12 @@ class Database:
         if "panel_message_id" not in goals_cols:
             await self._conn.execute("ALTER TABLE goals ADD COLUMN panel_message_id TEXT")
 
+        guns_cols = await self._table_columns("guns")
+        if "sellable" not in guns_cols:
+            await self._conn.execute("ALTER TABLE guns ADD COLUMN sellable INTEGER NOT NULL DEFAULT 1")
+        if "price_label" not in guns_cols:
+            await self._conn.execute("ALTER TABLE guns ADD COLUMN price_label TEXT")
+
     async def close(self):
         if self._conn:
             await self._conn.close()
@@ -173,11 +181,13 @@ class Database:
         discount_percent: float,
         category: Optional[str],
         emoji: str,
+        sellable: bool = True,
+        price_label: Optional[str] = None,
     ) -> int:
         cur = await self.conn.execute(
-            """INSERT INTO guns (guild_id, name, category, price, discount_percent, emoji)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (guild_id, name, category, price, discount_percent, emoji),
+            """INSERT INTO guns (guild_id, name, category, price, discount_percent, emoji, sellable, price_label)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (guild_id, name, category, price, discount_percent, emoji, int(sellable), price_label),
         )
         await self.conn.commit()
         return cur.lastrowid
@@ -221,10 +231,14 @@ class Database:
         )
         return await cur.fetchone()
 
-    async def list_guns(self, guild_id: str, active_only: bool = True) -> list[aiosqlite.Row]:
+    async def list_guns(
+        self, guild_id: str, active_only: bool = True, sellable_only: bool = False
+    ) -> list[aiosqlite.Row]:
         query = "SELECT * FROM guns WHERE guild_id = ?"
         if active_only:
             query += " AND active = 1"
+        if sellable_only:
+            query += " AND sellable = 1"
         query += " ORDER BY category IS NULL, category, price DESC"
         cur = await self.conn.execute(query, (guild_id,))
         return await cur.fetchall()

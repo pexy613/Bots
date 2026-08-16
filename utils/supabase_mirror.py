@@ -159,6 +159,8 @@ async def mirror_gun(bot, guild_id: str, name: str) -> None:
                 "discount_percent": row["discount_percent"],
                 "emoji": row["emoji"],
                 "active": row["active"],
+                "sellable": row["sellable"],
+                "price_label": row["price_label"],
             },
             on_conflict="id",
         )
