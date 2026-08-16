@@ -68,19 +68,21 @@ async def seed_guild(db, guild_id: str):
 
 async def seed_extra_items(db, guild_id: str):
     """Adds any missing catalog-only items from EXTRA_CATALOG. Runs on every
-    startup but is idempotent by name, and never revives an item an admin has
-    since removed (get_gun_any matches regardless of active status)."""
+    startup but never re-adds an item an admin has since removed (get_gun_any
+    matches regardless of active status) — it only skips the INSERT, not the
+    mirror, so a row that exists locally but failed to mirror previously
+    (e.g. a Supabase schema mismatch) retries on every restart until it
+    succeeds."""
     for item in EXTRA_CATALOG:
-        if await db.get_gun_any(guild_id, item["name"]):
-            continue
-        await db.add_gun(
-            guild_id=guild_id,
-            name=item["name"],
-            price=item["price"],
-            discount_percent=0,
-            category=item["category"],
-            emoji=item["emoji"],
-            sellable=False,
-            price_label=item.get("price_label"),
-        )
+        if not await db.get_gun_any(guild_id, item["name"]):
+            await db.add_gun(
+                guild_id=guild_id,
+                name=item["name"],
+                price=item["price"],
+                discount_percent=0,
+                category=item["category"],
+                emoji=item["emoji"],
+                sellable=False,
+                price_label=item.get("price_label"),
+            )
         supabase_upsert_gun(await db.get_gun_any(guild_id, item["name"]))
