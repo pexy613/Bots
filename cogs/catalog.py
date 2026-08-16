@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import DEFAULT_DISCOUNT_PERCENT, Emoji
-from utils.layouts import catalog_view, error_view
+from utils.layouts import catalog_embed, error_view
 from utils.supabase_mirror import mirror_gun
 
 
@@ -26,7 +26,7 @@ class Catalog(commands.Cog):
                 ephemeral=True,
             )
             return
-        await interaction.response.send_message(view=catalog_view(interaction.guild.name, guns))
+        await interaction.response.send_message(embed=catalog_embed(interaction.guild.name, guns))
 
     @catalog_group.command(name="add", description="[Admin] Add a weapon to the catalog")
     @app_commands.describe(
