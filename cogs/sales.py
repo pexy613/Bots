@@ -8,7 +8,7 @@ from discord.ui import ActionRow, Button, Container, LayoutView, Modal, Section,
 from cogs.dashboard import update_live_dashboard
 from cogs.goals import update_live_goal
 from cogs.leaderboard import update_live_leaderboard
-from config import Colors, Emoji
+from config import ALLY_PRICE_PERCENT, Colors, Emoji
 from utils.layouts import (
     DeleteSaleButton,
     error_view,
@@ -149,7 +149,7 @@ class PriceTypeSelect(Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="Full price", value="full", default=True),
-            discord.SelectOption(label="Ally price (discounted)", value="ally"),
+            discord.SelectOption(label=f"Ally price (-{ALLY_PRICE_PERCENT:g}%)", value="ally"),
             discord.SelectOption(label="Custom price", value="custom"),
         ]
         super().__init__(placeholder="Price (default Full)", options=options, min_values=0, max_values=1)
@@ -225,7 +225,7 @@ class SubmitButton(Button):
 
         record = next(g for g in view.guns if g["name"] == view.gun_name)
         if view.price_type == "ally":
-            unit_price = round(record["price"] * (1 - record["discount_percent"] / 100))
+            unit_price = round(record["price"] * (1 - ALLY_PRICE_PERCENT / 100))
         elif view.price_type == "custom":
             unit_price = view.custom_price
         else:

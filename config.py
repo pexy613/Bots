@@ -17,6 +17,10 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "data", "gunsales.db")
 DEFAULT_COMMISSION_PERCENT = 20.0
 DEFAULT_DISCOUNT_PERCENT = 25.0
 
+# Flat rate used when a sale is logged at "Ally price" in the Log Sale panel,
+# independent of each weapon's catalog discount_percent.
+ALLY_PRICE_PERCENT = 20.0
+
 
 class Colors:
     SALE = 0x2ECC71
