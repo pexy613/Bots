@@ -123,6 +123,7 @@ class PercentageSelect(discord.ui.Select):
             placeholder="Choose commission percentage",
             options=[
                 discord.SelectOption(label="5%", value="5"),
+                discord.SelectOption(label="8%", value="8"),
                 discord.SelectOption(label="10%", value="10"),
                 discord.SelectOption(label="15%", value="15"),
                 discord.SelectOption(label="20%", value="20"),
