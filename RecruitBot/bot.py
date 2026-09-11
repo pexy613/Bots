@@ -36,10 +36,16 @@ def setup_db() -> None:
             request_channel_id INTEGER,
             approval_channel_id INTEGER,
             staff_role_id INTEGER,
-            unverified_role_id INTEGER
+            unverified_role_id INTEGER,
+            log_channel_id INTEGER
         )
         """
     )
+
+    cur.execute("PRAGMA table_info(guild_config)")
+    guild_config_columns = [row[1] for row in cur.fetchall()]
+    if "log_channel_id" not in guild_config_columns:
+        cur.execute("ALTER TABLE guild_config ADD COLUMN log_channel_id INTEGER")
 
     cur.execute(
         """
@@ -116,7 +122,7 @@ def get_guild_config(guild_id: int) -> dict:
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT request_channel_id, approval_channel_id, staff_role_id, unverified_role_id FROM guild_config WHERE guild_id = ?",
+        "SELECT request_channel_id, approval_channel_id, staff_role_id, unverified_role_id, log_channel_id FROM guild_config WHERE guild_id = ?",
         (guild_id,),
     )
     row = cur.fetchone()
@@ -128,6 +134,7 @@ def get_guild_config(guild_id: int) -> dict:
             "approval_channel_id": None,
             "staff_role_id": None,
             "unverified_role_id": None,
+            "log_channel_id": None,
         }
 
     return {
@@ -135,6 +142,7 @@ def get_guild_config(guild_id: int) -> dict:
         "approval_channel_id": row[1],
         "staff_role_id": row[2],
         "unverified_role_id": row[3],
+        "log_channel_id": row[4],
     }
 
 
@@ -147,8 +155,8 @@ def set_guild_config(guild_id: int, **fields) -> None:
     cur.execute(
         """
         INSERT OR REPLACE INTO guild_config
-        (guild_id, request_channel_id, approval_channel_id, staff_role_id, unverified_role_id)
-        VALUES (?, ?, ?, ?, ?)
+        (guild_id, request_channel_id, approval_channel_id, staff_role_id, unverified_role_id, log_channel_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             guild_id,
@@ -156,6 +164,7 @@ def set_guild_config(guild_id: int, **fields) -> None:
             config["approval_channel_id"],
             config["staff_role_id"],
             config["unverified_role_id"],
+            config["log_channel_id"],
         ),
     )
     conn.commit()
@@ -394,6 +403,7 @@ def setup_status_embed(guild: discord.Guild) -> discord.Embed:
     embed.add_field(name="Approval Channel", value=channel_mention(cfg["approval_channel_id"]), inline=False)
     embed.add_field(name="Staff Role", value=role_mention(cfg["staff_role_id"]), inline=False)
     embed.add_field(name="Unverified Role", value=role_mention(cfg["unverified_role_id"]), inline=False)
+    embed.add_field(name="Log Channel", value=channel_mention(cfg["log_channel_id"]), inline=False)
     embed.add_field(name="Rank Options", value=str(rank_count), inline=False)
     embed.set_footer(text="Configure channels/roles with /setup and rank options with /rank-add.")
     return embed
@@ -606,6 +616,29 @@ class StaffApprovalView(discord.ui.View):
             nickname,
         )
 
+        log_channel_id = cfg.get("log_channel_id")
+        log_channel = interaction.guild.get_channel(int(log_channel_id)) if log_channel_id else None
+        if log_channel:
+            approved_embed = discord.Embed(title="✅ ROLE REQUEST APPROVED", color=discord.Color.green())
+            approved_embed.add_field(name="👤 Discord Member", value=member.mention, inline=True)
+            approved_embed.add_field(name="🎮 In-Game Name", value=player_name or "N/A", inline=True)
+            approved_embed.add_field(name="🆔 In-Game ID", value=player_id or "N/A", inline=True)
+            approved_embed.add_field(name="🔥 Role Added", value=rank_role.mention, inline=True)
+            approved_embed.add_field(
+                name="🔒 Unverified",
+                value="Removed" if cfg.get("unverified_role_id") else "N/A",
+                inline=True,
+            )
+            if nickname:
+                approved_embed.add_field(name="✏️ Nickname", value=f"`{nickname}`", inline=True)
+            approved_embed.add_field(name="🛡️ Approved By", value=interaction.user.mention, inline=False)
+            approved_embed.set_footer(text="RecruitBot")
+            approved_embed.timestamp = discord.utils.utcnow()
+            try:
+                await log_channel.send(embed=approved_embed)
+            except discord.Forbidden:
+                log.warning("Missing permission to post approval log in guild %s", self.guild_id)
+
         await interaction.response.defer(ephemeral=True)
         if interaction.message:
             try:
@@ -627,8 +660,32 @@ class StaffApprovalView(discord.ui.View):
             await interaction.response.send_message("Guild mismatch for this request.", ephemeral=True)
             return
 
+        recruit = get_recruit(self.guild_id, self.user_id)
+        member = interaction.guild.get_member(self.user_id)
+
         delete_user(self.guild_id, self.user_id)
         supabase_delete_user(self.guild_id, self.user_id)
+
+        cfg = get_guild_config(self.guild_id)
+        log_channel_id = cfg.get("log_channel_id")
+        log_channel = interaction.guild.get_channel(int(log_channel_id)) if log_channel_id else None
+        if log_channel:
+            denied_embed = discord.Embed(title="❌ ROLE REQUEST DENIED", color=discord.Color.red())
+            denied_embed.add_field(
+                name="👤 Discord Member",
+                value=member.mention if member else "Member left the server.",
+                inline=True,
+            )
+            if recruit:
+                denied_embed.add_field(name="🎮 In-Game Name", value=str(recruit[0] or "N/A"), inline=True)
+                denied_embed.add_field(name="🆔 In-Game ID", value=str(recruit[1] or "N/A"), inline=True)
+            denied_embed.add_field(name="🚫 Denied By", value=interaction.user.mention, inline=False)
+            denied_embed.set_footer(text="RecruitBot")
+            denied_embed.timestamp = discord.utils.utcnow()
+            try:
+                await log_channel.send(embed=denied_embed)
+            except discord.Forbidden:
+                log.warning("Missing permission to post denial log in guild %s", self.guild_id)
 
         await interaction.response.defer(ephemeral=True)
         if interaction.message:
@@ -693,6 +750,18 @@ async def setup_roles(
     )
     await interaction.followup.send(
         f"Configured roles. Staff: {staff_role.mention} | Unverified: {unverified_role.mention}",
+        ephemeral=True,
+    )
+
+
+@setup_group.command(name="log-channel", description="Set the channel where approve/deny logs are posted")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(log_channel="Where approved/denied recruit logs are posted")
+async def setup_log_channel(interaction: discord.Interaction, log_channel: discord.TextChannel):
+    await interaction.response.defer(ephemeral=True)
+    set_guild_config(interaction.guild_id, log_channel_id=log_channel.id)
+    await interaction.followup.send(
+        f"Configured log channel: {log_channel.mention}",
         ephemeral=True,
     )
 
