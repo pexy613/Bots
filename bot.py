@@ -68,6 +68,7 @@ async def main():
         await bot.load_extension("cogs.wash")
         await bot.load_extension("cogs.stats")
         await bot.load_extension("cogs.leaderboard")
+        await bot.load_extension("cogs.gang_leaderboard")
         await bot.load_extension("cogs.dashboard")
         await bot.load_extension("cogs.receipts")
         await bot.load_extension("cogs.staff")

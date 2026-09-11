@@ -15,6 +15,7 @@ from utils import format_money, can_manage
 from ui import create_embed
 from cogs.live_dashboard import update_live_dashboard
 from cogs.leaderboard import update_live_leaderboard
+from cogs.gang_leaderboard import update_live_gang_leaderboard
 from cogs.combined_panels import update_live_combined_dashboard, update_live_combined_leaderboard
 
 load_dotenv()
@@ -33,7 +34,7 @@ log = logging.getLogger("wash")
 # network call fails.
 
 def supabase_log_transaction(discord_user_id: int, discord_username: str, amount_processed: float,
-                              fee_percent: float, net_profit: float, logged_at: str) -> None:
+                              fee_percent: float, net_profit: float, gang_name: str | None, logged_at: str) -> None:
     try:
         supabase.schema("Laundering_bot").table("transactions").insert({
             "discord_user_id": discord_user_id,
@@ -41,6 +42,7 @@ def supabase_log_transaction(discord_user_id: int, discord_username: str, amount
             "amount_processed": amount_processed,
             "fee_percent": fee_percent,
             "net_profit": net_profit,
+            "gang_name": gang_name,
             "logged_at": logged_at,
         }).execute()
     except Exception:
@@ -99,6 +101,7 @@ class DeleteWashButton(discord.ui.DynamicItem[discord.ui.Button], template=r"del
 
         await update_live_dashboard(interaction.client, interaction.guild_id)
         await update_live_leaderboard(interaction.client, interaction.guild_id)
+        await update_live_gang_leaderboard(interaction.client, interaction.guild_id)
         await update_live_combined_dashboard(interaction.client, interaction.guild_id)
         await update_live_combined_leaderboard(interaction.client, interaction.guild_id)
 
@@ -106,40 +109,121 @@ class DeleteWashButton(discord.ui.DynamicItem[discord.ui.Button], template=r"del
         await update_goal_dashboard(interaction.client, interaction.guild_id)
 
 
-class AmountSelect(discord.ui.Select):
-    def __init__(self, placeholder: str, options, custom_id: str):
-        super().__init__(placeholder=placeholder, options=options, min_values=1, max_values=1, custom_id=custom_id)
+COMMISSION_PERCENTAGES = (5, 8, 10, 15, 20, 25, 30)
+
+AMOUNT_BLOCKS = (
+    (0, "$1M – $10M"),
+    (10, "$11M – $20M"),
+    (20, "$21M – $30M"),
+    (30, "$31M – $40M"),
+    (40, "$41M – $50M"),
+)
+
+
+class AmountBlockSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label=label, value=str(block_start), emoji="💸")
+            for block_start, label in AMOUNT_BLOCKS
+        ]
+        super().__init__(
+            placeholder="Step 1: Choose amount range",
+            options=options,
+            min_values=1,
+            max_values=1,
+            custom_id="wash_amount_block_select",
+            row=0
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        block_start = int(self.values[0])
+        self.view.amount_washed = None
+        self.view.set_amount_block(block_start)
+        label = next(label for start, label in AMOUNT_BLOCKS if start == block_start)
+        self.placeholder = f"Range: {label}"
+        await interaction.response.edit_message(embed=self.view.build_status_embed(), view=self.view)
+
+
+class AmountExactSelect(discord.ui.Select):
+    def __init__(self):
+        super().__init__(
+            placeholder="Step 2: Pick a range above first",
+            options=[discord.SelectOption(label="Pick a range above first", value="placeholder")],
+            min_values=1,
+            max_values=1,
+            custom_id="wash_amount_exact_select",
+            row=1,
+            disabled=True
+        )
 
     async def callback(self, interaction: discord.Interaction):
         amount_value = int(self.values[0])
         self.view.amount_washed = amount_value
         self.placeholder = f"Amount: ${format_money(amount_value)}"
-        await interaction.response.edit_message(content=f"✅ Amount set to ${format_money(amount_value)}")
+        await interaction.response.edit_message(embed=self.view.build_status_embed(), view=self.view)
 
 
-class PercentageSelect(discord.ui.Select):
+class CommissionButton(discord.ui.Button):
+    def __init__(self, percentage: float, row: int):
+        super().__init__(
+            label=f"{percentage:.0f}%",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"wash_commission_button_{percentage:.0f}",
+            row=row
+        )
+        self.percentage = percentage
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.percentage_taken = self.percentage
+        self.view.refresh_commission_buttons()
+        await interaction.response.edit_message(embed=self.view.build_status_embed(), view=self.view)
+
+
+class GangModal(discord.ui.Modal, title="Set Gang"):
+    def __init__(self, wash_view: "WashSelectionView"):
+        super().__init__()
+        self.wash_view = wash_view
+        self.gang_input = discord.ui.TextInput(
+            label="Gang name",
+            placeholder="e.g. Vagos",
+            max_length=100,
+            required=True,
+            default=wash_view.gang_name or None
+        )
+        self.add_item(self.gang_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.wash_view.gang_name = str(self.gang_input.value).strip()
+        self.wash_view.refresh_gang_button()
+        await interaction.response.edit_message(embed=self.wash_view.build_status_embed(), view=self.wash_view)
+
+
+class GangButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
-            placeholder="Choose commission percentage",
-            options=[
-                discord.SelectOption(label="5%", value="5"),
-                discord.SelectOption(label="8%", value="8"),
-                discord.SelectOption(label="10%", value="10"),
-                discord.SelectOption(label="15%", value="15"),
-                discord.SelectOption(label="20%", value="20"),
-                discord.SelectOption(label="25%", value="25"),
-                discord.SelectOption(label="30%", value="30")
-            ],
-            min_values=1,
-            max_values=1,
-            custom_id="wash_percentage_select"
+            label="Set Gang (optional)",
+            emoji="🏷️",
+            style=discord.ButtonStyle.secondary,
+            custom_id="wash_gang_button",
+            row=3
         )
 
     async def callback(self, interaction: discord.Interaction):
-        percentage_value = float(self.values[0])
-        self.view.percentage_taken = percentage_value
-        self.placeholder = f"Commission: {percentage_value:.0f}%"
-        await interaction.response.edit_message(content=f"✅ Commission set to {percentage_value:.0f}%")
+        await interaction.response.send_modal(GangModal(self.view))
+
+
+class LogWashButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            label="Log Wash",
+            emoji="🧼",
+            style=discord.ButtonStyle.green,
+            custom_id="wash_submit_button",
+            row=3
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.view.do_submit(interaction)
 
 
 class WashSelectionView(discord.ui.View):
@@ -147,80 +231,77 @@ class WashSelectionView(discord.ui.View):
         super().__init__(timeout=180)
         self.amount_washed = None
         self.percentage_taken = None
+        self.gang_name = None
         self._submission_in_progress = False
         self._submit_lock = asyncio.Lock()
 
-        amount_options_1 = [
-            discord.SelectOption(label="$1,000,000", value="1000000", emoji="💸"),
-            discord.SelectOption(label="$2,000,000", value="2000000", emoji="💸"),
-            discord.SelectOption(label="$3,000,000", value="3000000", emoji="💸"),
-            discord.SelectOption(label="$4,000,000", value="4000000", emoji="💸"),
-            discord.SelectOption(label="$5,000,000", value="5000000", emoji="💸"),
-            discord.SelectOption(label="$6,000,000", value="6000000", emoji="💸"),
-            discord.SelectOption(label="$7,000,000", value="7000000", emoji="💸"),
-            discord.SelectOption(label="$8,000,000", value="8000000", emoji="💸"),
-            discord.SelectOption(label="$9,000,000", value="9000000", emoji="💸"),
-            discord.SelectOption(label="$10,000,000", value="10000000", emoji="💸"),
-            discord.SelectOption(label="$11,000,000", value="11000000", emoji="💸"),
-            discord.SelectOption(label="$12,000,000", value="12000000", emoji="💸"),
-            discord.SelectOption(label="$13,000,000", value="13000000", emoji="💸"),
-            discord.SelectOption(label="$14,000,000", value="14000000", emoji="💸"),
-            discord.SelectOption(label="$15,000,000", value="15000000", emoji="💸"),
-            discord.SelectOption(label="$16,000,000", value="16000000", emoji="💸"),
-            discord.SelectOption(label="$17,000,000", value="17000000", emoji="💸"),
-            discord.SelectOption(label="$18,000,000", value="18000000", emoji="💸"),
-            discord.SelectOption(label="$19,000,000", value="19000000", emoji="💸"),
-            discord.SelectOption(label="$20,000,000", value="20000000", emoji="💸"),
-            discord.SelectOption(label="$21,000,000", value="21000000", emoji="💸"),
-            discord.SelectOption(label="$22,000,000", value="22000000", emoji="💸"),
-            discord.SelectOption(label="$23,000,000", value="23000000", emoji="💸"),
-            discord.SelectOption(label="$24,000,000", value="24000000", emoji="💸"),
-            discord.SelectOption(label="$25,000,000", value="25000000", emoji="💸")
-        ]
+        self.amount_exact_select = AmountExactSelect()
 
-        amount_options_2 = [
-            discord.SelectOption(label="$26,000,000", value="26000000", emoji="💸"),
-            discord.SelectOption(label="$27,000,000", value="27000000", emoji="💸"),
-            discord.SelectOption(label="$28,000,000", value="28000000", emoji="💸"),
-            discord.SelectOption(label="$29,000,000", value="29000000", emoji="💸"),
-            discord.SelectOption(label="$30,000,000", value="30000000", emoji="💸"),
-            discord.SelectOption(label="$31,000,000", value="31000000", emoji="💸"),
-            discord.SelectOption(label="$32,000,000", value="32000000", emoji="💸"),
-            discord.SelectOption(label="$33,000,000", value="33000000", emoji="💸"),
-            discord.SelectOption(label="$34,000,000", value="34000000", emoji="💸"),
-            discord.SelectOption(label="$35,000,000", value="35000000", emoji="💸"),
-            discord.SelectOption(label="$36,000,000", value="36000000", emoji="💸"),
-            discord.SelectOption(label="$37,000,000", value="37000000", emoji="💸"),
-            discord.SelectOption(label="$38,000,000", value="38000000", emoji="💸"),
-            discord.SelectOption(label="$39,000,000", value="39000000", emoji="💸"),
-            discord.SelectOption(label="$40,000,000", value="40000000", emoji="💸"),
-            discord.SelectOption(label="$41,000,000", value="41000000", emoji="💸"),
-            discord.SelectOption(label="$42,000,000", value="42000000", emoji="💸"),
-            discord.SelectOption(label="$43,000,000", value="43000000", emoji="💸"),
-            discord.SelectOption(label="$44,000,000", value="44000000", emoji="💸"),
-            discord.SelectOption(label="$45,000,000", value="45000000", emoji="💸"),
-            discord.SelectOption(label="$46,000,000", value="46000000", emoji="💸"),
-            discord.SelectOption(label="$47,000,000", value="47000000", emoji="💸"),
-            discord.SelectOption(label="$48,000,000", value="48000000", emoji="💸"),
-            discord.SelectOption(label="$49,000,000", value="49000000", emoji="💸"),
-            discord.SelectOption(label="$50,000,000", value="50000000", emoji="💸")
-        ]
+        self.add_item(AmountBlockSelect())
+        self.add_item(self.amount_exact_select)
 
-        self.add_item(
-            AmountSelect(
-                placeholder="Choose amount washed (1M–25M)",
-                options=amount_options_1,
-                custom_id="wash_amount_select_1"
+        for percentage in COMMISSION_PERCENTAGES[:5]:
+            self.add_item(CommissionButton(percentage, row=2))
+        for percentage in COMMISSION_PERCENTAGES[5:]:
+            self.add_item(CommissionButton(percentage, row=3))
+
+        self.add_item(GangButton())
+        self.add_item(LogWashButton())
+
+    def set_amount_block(self, block_start: int):
+        options = [
+            discord.SelectOption(
+                label=f"${(block_start + m) * 1_000_000:,}",
+                value=str((block_start + m) * 1_000_000),
+                emoji="💸"
             )
+            for m in range(1, 11)
+        ]
+        self.amount_exact_select.options = options
+        self.amount_exact_select.disabled = False
+        self.amount_exact_select.placeholder = "Step 2: Choose exact amount"
+
+    def refresh_commission_buttons(self):
+        for child in self.children:
+            if isinstance(child, CommissionButton):
+                child.style = (
+                    discord.ButtonStyle.success
+                    if child.percentage == self.percentage_taken
+                    else discord.ButtonStyle.secondary
+                )
+
+    def refresh_gang_button(self):
+        for child in self.children:
+            if isinstance(child, GangButton):
+                if self.gang_name:
+                    child.label = f"Gang: {self.gang_name}"[:80]
+                    child.style = discord.ButtonStyle.success
+                else:
+                    child.label = "Set Gang (optional)"
+                    child.style = discord.ButtonStyle.secondary
+
+    def build_status_embed(self) -> discord.Embed:
+        embed = create_embed(
+            "🧼 Money Wash Logger",
+            color=discord.Color.blurple(),
+            description="Use the menus and buttons below to log your money wash — nothing is submitted until you press Log Wash."
         )
-        self.add_item(
-            AmountSelect(
-                placeholder="Choose amount washed (26M–50M)",
-                options=amount_options_2,
-                custom_id="wash_amount_select_2"
-            )
+        embed.add_field(
+            name="💵 Amount",
+            value=f"**${format_money(self.amount_washed)}**" if self.amount_washed is not None else "*Not set*",
+            inline=True
         )
-        self.add_item(PercentageSelect())
+        embed.add_field(
+            name="📉 Commission",
+            value=f"**{self.percentage_taken:.0f}%**" if self.percentage_taken is not None else "*Not set*",
+            inline=True
+        )
+        embed.add_field(
+            name="🏷️ Gang",
+            value=f"**{self.gang_name}**" if self.gang_name else "*Not set (optional)*",
+            inline=True
+        )
+        return embed
 
     def begin_submission(self) -> bool:
         if self._submission_in_progress:
@@ -241,14 +322,8 @@ class WashSelectionView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(
-        label="Log Wash",
-        emoji="🧼",
-        style=discord.ButtonStyle.green,
-        custom_id="wash_submit_button"
-    )
-    async def submit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.begin_submission():
+    async def do_submit(self, interaction: discord.Interaction):
+        if self._submission_in_progress:
             await interaction.response.send_message(
                 "⏳ This wash is already being logged. Please wait a moment.",
                 ephemeral=True
@@ -262,9 +337,17 @@ class WashSelectionView(discord.ui.View):
             )
             return
 
+        if not self.begin_submission():
+            await interaction.response.send_message(
+                "⏳ This wash is already being logged. Please wait a moment.",
+                ephemeral=True
+            )
+            return
+
         async with self._submit_lock:
             amount_washed = self.amount_washed
         percentage_taken = self.percentage_taken
+        gang_name = self.gang_name
         profit_taken = int(amount_washed * (percentage_taken / 100))
 
         conn = database.get_connection()
@@ -272,20 +355,30 @@ class WashSelectionView(discord.ui.View):
 
         cursor.execute("""
             INSERT INTO washes
-            (guild_id, user, user_id, amount_washed, percentage_taken, profit_taken)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (guild_id, user, user_id, amount_washed, percentage_taken, profit_taken, gang_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             interaction.guild_id,
             str(interaction.user),
             interaction.user.id,
             amount_washed,
             percentage_taken,
-            profit_taken
+            profit_taken,
+            gang_name
         ))
 
         wash_id = cursor.lastrowid
         conn.commit()
         conn.close()
+
+        await interaction.response.edit_message(
+            embed=create_embed(
+                "✅ Wash Logged",
+                color=discord.Color.green(),
+                description=f"Wash #{wash_id} has been recorded below."
+            ),
+            view=self
+        )
 
         embed = create_embed(
             "🧾 MONEY WASH RECEIPT",
@@ -315,6 +408,13 @@ class WashSelectionView(discord.ui.View):
             inline=True
         )
 
+        if gang_name:
+            embed.add_field(
+                name="🏷️ Gang",
+                value=f"**{gang_name}**",
+                inline=True
+            )
+
         embed.add_field(
             name="👤 Logged By",
             value=f"**{interaction.user.display_name}**\n{interaction.user.mention}",
@@ -331,7 +431,7 @@ class WashSelectionView(discord.ui.View):
 
         delete_view = discord.ui.View(timeout=None)
         delete_view.add_item(DeleteWashButton(wash_id))
-        await interaction.response.send_message(embed=embed, view=delete_view)
+        await interaction.followup.send(embed=embed, view=delete_view)
 
         supabase_log_transaction(
             interaction.user.id,
@@ -339,11 +439,13 @@ class WashSelectionView(discord.ui.View):
             amount_washed,
             percentage_taken,
             profit_taken,
+            gang_name,
             datetime.now(timezone.utc).isoformat(),
         )
 
         await update_live_dashboard(interaction.client, interaction.guild_id)
         await update_live_leaderboard(interaction.client, interaction.guild_id)
+        await update_live_gang_leaderboard(interaction.client, interaction.guild_id)
         await update_live_combined_dashboard(interaction.client, interaction.guild_id)
         await update_live_combined_leaderboard(interaction.client, interaction.guild_id)
 

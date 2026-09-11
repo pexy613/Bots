@@ -18,12 +18,8 @@ class LogWashPanel(discord.ui.View):
         custom_id="log_wash_button_persistent_v2"
     )
     async def log_wash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = create_embed(
-            "🧼 Money Wash Logger",
-            color=discord.Color.blurple(),
-            description="Use the menu below to log your money wash."
-        )
-        await interaction.response.send_message(embed=embed, view=WashSelectionView(), ephemeral=True)
+        view = WashSelectionView()
+        await interaction.response.send_message(embed=view.build_status_embed(), view=view, ephemeral=True)
 
 
 async def move_log_panel_to_bottom(channel, guild_id):

@@ -46,6 +46,9 @@ def init_db():
     if "amount_deposited" in _column_names(cursor, "washes"):
         cursor.execute("ALTER TABLE washes DROP COLUMN amount_deposited")
 
+    if "gang_name" not in _column_names(cursor, "washes"):
+        cursor.execute("ALTER TABLE washes ADD COLUMN gang_name TEXT")
+
     if _table_exists(cursor, "settings") and "guild_id" not in _column_names(cursor, "settings"):
         cursor.execute("ALTER TABLE settings RENAME TO settings_legacy")
         cursor.execute("""
