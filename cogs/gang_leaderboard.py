@@ -192,6 +192,29 @@ class GangLeaderboardCog(commands.Cog):
             ephemeral=True
         )
 
+    @discord.app_commands.command(
+        name="gangremove",
+        description="Remove a gang from the wash logger's picker list (past wash history is kept)."
+    )
+    @discord.app_commands.describe(gang_name="The gang to remove from the picker list")
+    async def gangremove(self, interaction: discord.Interaction, gang_name: str):
+        if not await self.check_permissions(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        removed = gangs.remove_gang(interaction.guild_id, gang_name)
+        if removed is None:
+            await interaction.followup.send(
+                f"❌ No registered gang matching `{gang_name}` was found.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.followup.send(
+            f"✅ **{removed}** removed from the gang picker list. Past wash history logged under it is unaffected.",
+            ephemeral=True
+        )
+
     @discord.app_commands.command(name="ganglist", description="List all registered gangs and shortcut aliases.")
     async def ganglist(self, interaction: discord.Interaction):
         if not await self.check_permissions(interaction):

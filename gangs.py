@@ -113,3 +113,23 @@ def merge_gang(guild_id: int, from_name: str, into_name: str) -> str:
     )
 
     return into_canonical
+
+
+def remove_gang(guild_id: int, gang_name: str) -> str | None:
+    """Remove a gang from the picker list. Past wash history keeps its logged
+    gang_name untouched — this only stops the gang from being offered again."""
+    key = normalize_key(gang_name)
+
+    gang_rows = database.fetchall(
+        "SELECT canonical_name FROM gangs WHERE guild_id = ?",
+        (guild_id,)
+    )
+    match = next((name for (name,) in gang_rows if normalize_key(name) == key), None)
+    if match is None:
+        return None
+
+    database.execute(
+        "DELETE FROM gangs WHERE guild_id = ? AND canonical_name = ?",
+        (guild_id, match)
+    )
+    return match
