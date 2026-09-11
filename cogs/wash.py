@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 import database
+import gangs
 from utils import format_money, can_manage
 from ui import create_embed
 from cogs.live_dashboard import update_live_dashboard
@@ -179,37 +180,63 @@ class CommissionButton(discord.ui.Button):
         await interaction.response.edit_message(embed=self.view.build_status_embed(), view=self.view)
 
 
-class GangModal(discord.ui.Modal, title="Set Gang"):
+NEW_GANG_VALUE = "__new_gang__"
+
+
+class GangModal(discord.ui.Modal, title="Add a New Gang"):
     def __init__(self, wash_view: "WashSelectionView"):
         super().__init__()
         self.wash_view = wash_view
         self.gang_input = discord.ui.TextInput(
             label="Gang name",
-            placeholder="e.g. Vagos",
+            placeholder="e.g. Cash Flow Cartel",
             max_length=100,
-            required=True,
-            default=wash_view.gang_name or None
+            required=True
         )
         self.add_item(self.gang_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        self.wash_view.gang_name = str(self.gang_input.value).strip()
-        self.wash_view.refresh_gang_button()
+        canonical_name = gangs.resolve_gang_name(self.wash_view.guild_id, str(self.gang_input.value))
+        self.wash_view.gang_name = canonical_name
+        self.wash_view.refresh_gang_select()
         await interaction.response.edit_message(embed=self.wash_view.build_status_embed(), view=self.wash_view)
 
 
-class GangButton(discord.ui.Button):
-    def __init__(self):
+class GangSelect(discord.ui.Select):
+    def __init__(self, guild_id: int):
         super().__init__(
-            label="Set Gang (optional)",
-            emoji="🏷️",
-            style=discord.ButtonStyle.secondary,
-            custom_id="wash_gang_button",
-            row=3
+            placeholder="Step 3: Choose gang (optional)",
+            options=[discord.SelectOption(label="➕ Add a new gang", value=NEW_GANG_VALUE, emoji="✨")],
+            min_values=1,
+            max_values=1,
+            custom_id="wash_gang_select",
+            row=4
         )
+        self.guild_id = guild_id
+        self.refresh_options(selected=None)
+
+    def refresh_options(self, selected):
+        known_gangs = gangs.list_known_gangs(self.guild_id)
+        if selected and selected not in known_gangs:
+            known_gangs = [selected] + known_gangs
+
+        options = [
+            discord.SelectOption(label=name[:100], value=name[:100], emoji="🏷️", default=(name == selected))
+            for name in known_gangs[:24]
+        ]
+        options.append(discord.SelectOption(label="➕ Add a new gang", value=NEW_GANG_VALUE, emoji="✨"))
+        self.options = options
+        self.placeholder = f"Gang: {selected}"[:150] if selected else "Step 3: Choose gang (optional)"
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(GangModal(self.view))
+        selected_value = self.values[0]
+        if selected_value == NEW_GANG_VALUE:
+            await interaction.response.send_modal(GangModal(self.view))
+            return
+
+        self.view.gang_name = selected_value
+        self.refresh_options(selected=selected_value)
+        await interaction.response.edit_message(embed=self.view.build_status_embed(), view=self.view)
 
 
 class LogWashButton(discord.ui.Button):
@@ -227,8 +254,9 @@ class LogWashButton(discord.ui.Button):
 
 
 class WashSelectionView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, guild_id: int):
         super().__init__(timeout=180)
+        self.guild_id = guild_id
         self.amount_washed = None
         self.percentage_taken = None
         self.gang_name = None
@@ -245,8 +273,8 @@ class WashSelectionView(discord.ui.View):
         for percentage in COMMISSION_PERCENTAGES[5:]:
             self.add_item(CommissionButton(percentage, row=3))
 
-        self.add_item(GangButton())
         self.add_item(LogWashButton())
+        self.add_item(GangSelect(guild_id))
 
     def set_amount_block(self, block_start: int):
         options = [
@@ -270,15 +298,10 @@ class WashSelectionView(discord.ui.View):
                     else discord.ButtonStyle.secondary
                 )
 
-    def refresh_gang_button(self):
+    def refresh_gang_select(self):
         for child in self.children:
-            if isinstance(child, GangButton):
-                if self.gang_name:
-                    child.label = f"Gang: {self.gang_name}"[:80]
-                    child.style = discord.ButtonStyle.success
-                else:
-                    child.label = "Set Gang (optional)"
-                    child.style = discord.ButtonStyle.secondary
+            if isinstance(child, GangSelect):
+                child.refresh_options(selected=self.gang_name)
 
     def build_status_embed(self) -> discord.Embed:
         embed = create_embed(

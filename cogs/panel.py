@@ -18,7 +18,7 @@ class LogWashPanel(discord.ui.View):
         custom_id="log_wash_button_persistent_v2"
     )
     async def log_wash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = WashSelectionView()
+        view = WashSelectionView(interaction.guild_id)
         await interaction.response.send_message(embed=view.build_status_embed(), view=view, ephemeral=True)
 
 

@@ -49,6 +49,26 @@ def init_db():
     if "gang_name" not in _column_names(cursor, "washes"):
         cursor.execute("ALTER TABLE washes ADD COLUMN gang_name TEXT")
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gangs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id INTEGER NOT NULL,
+        canonical_name TEXT NOT NULL,
+        name_key TEXT NOT NULL,
+        UNIQUE(guild_id, name_key)
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gang_aliases (
+        guild_id INTEGER NOT NULL,
+        alias_key TEXT NOT NULL,
+        alias_display TEXT NOT NULL,
+        canonical_name TEXT NOT NULL,
+        PRIMARY KEY (guild_id, alias_key)
+    )
+    """)
+
     if _table_exists(cursor, "settings") and "guild_id" not in _column_names(cursor, "settings"):
         cursor.execute("ALTER TABLE settings RENAME TO settings_legacy")
         cursor.execute("""

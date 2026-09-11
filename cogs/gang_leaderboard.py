@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 
 import database
+import gangs
 from utils import format_money, is_management
 from ui import create_embed
 
@@ -151,6 +152,66 @@ class GangLeaderboardCog(commands.Cog):
             "✅ Live gang leaderboard reset. You can now run `/setupgangleaderboard` again.",
             ephemeral=True
         )
+
+    @discord.app_commands.command(
+        name="gangalias",
+        description="Make a shortcut resolve to a gang's full name (e.g. 'cfc' -> 'Cash Flow Cartel')."
+    )
+    @discord.app_commands.describe(
+        alias="The shortcut people might type (e.g. cfc)",
+        gang_name="The full gang name it should resolve to"
+    )
+    async def gangalias(self, interaction: discord.Interaction, alias: str, gang_name: str):
+        if not await self.check_permissions(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        canonical = gangs.add_alias(interaction.guild_id, alias, gang_name)
+        await interaction.followup.send(
+            f"✅ `{alias}` will now resolve to **{canonical}**.",
+            ephemeral=True
+        )
+
+    @discord.app_commands.command(
+        name="gangmerge",
+        description="Fold an existing gang name variant (typo/case/spacing duplicate) into another."
+    )
+    @discord.app_commands.describe(
+        from_name="The duplicate/incorrect gang name currently in the logs",
+        into_name="The correct gang name to merge it into"
+    )
+    async def gangmerge(self, interaction: discord.Interaction, from_name: str, into_name: str):
+        if not await self.check_permissions(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        canonical = gangs.merge_gang(interaction.guild_id, from_name, into_name)
+        await update_live_gang_leaderboard(self.bot, interaction.guild_id)
+        await interaction.followup.send(
+            f"✅ All washes logged under `{from_name}` are now credited to **{canonical}**.",
+            ephemeral=True
+        )
+
+    @discord.app_commands.command(name="ganglist", description="List all registered gangs and shortcut aliases.")
+    async def ganglist(self, interaction: discord.Interaction):
+        if not await self.check_permissions(interaction):
+            return
+
+        known = gangs.list_known_gangs(interaction.guild_id, limit=25)
+        aliases = gangs.list_aliases(interaction.guild_id)
+
+        embed = create_embed("🏷️ Registered Gangs", color=discord.Color.blurple())
+        embed.add_field(
+            name="Gangs",
+            value="\n".join(f"• {name}" for name in known) if known else "No gangs registered yet.",
+            inline=False
+        )
+        embed.add_field(
+            name="Aliases",
+            value="\n".join(f"• `{alias}` → {canonical}" for alias, canonical in aliases) if aliases else "No aliases registered yet.",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 async def setup(bot):
