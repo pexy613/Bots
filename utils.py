@@ -5,13 +5,15 @@ def format_money(amount: int | float) -> str:
     return f"{int(amount):,}"
 
 
-def is_management(member) -> bool:
-    return any("management" in role.name.lower() for role in getattr(member, "roles", []))
-
-
 def is_admin(member) -> bool:
     permissions = getattr(member, "guild_permissions", None)
     return bool(permissions and permissions.administrator)
+
+
+def is_management(member) -> bool:
+    if is_admin(member):
+        return True
+    return any("management" in role.name.lower() for role in getattr(member, "roles", []))
 
 
 def can_manage(member) -> bool:
