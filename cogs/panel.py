@@ -1,3 +1,5 @@
+import logging
+
 import discord
 from discord.ext import commands
 
@@ -5,6 +7,8 @@ import database
 from utils import is_management
 from ui import create_embed
 from cogs.wash import WashSelectionView
+
+log = logging.getLogger("panel")
 
 
 class LogWashPanel(discord.ui.View):
@@ -69,7 +73,23 @@ class PanelCog(commands.Cog):
             )
             return
 
-        await move_log_panel_to_bottom(interaction.channel, interaction.guild_id)
+        try:
+            await move_log_panel_to_bottom(interaction.channel, interaction.guild_id)
+        except discord.Forbidden:
+            log.exception("setuplogpanel: missing permissions in channel %s", interaction.channel_id)
+            await interaction.followup.send(
+                "❌ I don't have permission to post in this channel. Give my role **View Channel**, "
+                "**Send Messages**, **Embed Links**, and **Read Message History** here, then run this again.",
+                ephemeral=True
+            )
+            return
+        except Exception as e:
+            log.exception("setuplogpanel failed in channel %s", interaction.channel_id)
+            await interaction.followup.send(
+                f"❌ Couldn't create the panel: `{type(e).__name__}: {e}`",
+                ephemeral=True
+            )
+            return
 
         await interaction.followup.send(
             "✅ Log Wash panel created.",
